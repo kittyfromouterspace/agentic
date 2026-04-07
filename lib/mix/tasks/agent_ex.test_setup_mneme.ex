@@ -26,7 +26,7 @@ defmodule Mix.Tasks.AgentEx.TestSetupMneme do
 
     config = Application.get_env(:mneme, repo)
 
-    unless config do
+    if !config do
       config =
         [
           database: "mneme_test",
@@ -54,7 +54,7 @@ defmodule Mix.Tasks.AgentEx.TestSetupMneme do
           path
       end
 
-    unless File.dir?(migrations) do
+    if !File.dir?(migrations) do
       Mix.raise("Cannot find Mneme migrations at #{migrations}")
     end
 

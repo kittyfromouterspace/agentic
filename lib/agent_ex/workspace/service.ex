@@ -140,7 +140,7 @@ defmodule AgentEx.Workspace.Service do
   end
 
   defp write_if_missing(ctx, filename, content) do
-    unless Context.exists?(ctx, filename) do
+    if !Context.exists?(ctx, filename) do
       Context.write(ctx, filename, content)
       Logger.info("Created #{filename}")
     end
@@ -150,7 +150,7 @@ defmodule AgentEx.Workspace.Service do
     date = Date.utc_today()
     log_path = "memory/#{date}.md"
 
-    unless Context.exists?(ctx, log_path) do
+    if !Context.exists?(ctx, log_path) do
       Context.write(ctx, log_path, Templates.daily_log_md(date))
       Logger.info("Created daily log: #{log_path}")
     end

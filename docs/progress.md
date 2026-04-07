@@ -2,7 +2,7 @@
 
 > Tracks multi-mode loop implementation. See [decisions.md](./decisions.md) for design decisions log.
 
-## Status: V1.1 COMPLETE (235 tests, 0 failures)
+## Status: V2.1 COMPLETE (266 tests, 0 failures)
 
 - [ ] Not started
 - [~] In progress
@@ -61,14 +61,58 @@
 
 ---
 
-## Next: V1.2
+## V1.2 — COMPLETE
 
-- Prompt prefix / cache awareness (stable/volatile separation)
-- LLMCall restructured with cache boundary markers
-- `stable_prefix_hash` context field
+- [x] LLMCall restructured with stable/volatile message separation
+- [x] `cache_control` param with `stable_hash` and `prefix_changed` sent to `llm_chat`
+- [x] `stable_prefix_hash` context field (tracks when prefix changes)
+- [x] Hash computed from system prompt + tool definitions
+- [x] Cache awareness tests (6 tests)
 
-## Future: V2.0
+---
 
-- Bounded subagents + ported Coordinator architecture
-- `delegate_task` tool, LLMSemaphore for subagent depth
-- Tool permission gating (V2.1)
+## V1.3 — COMPLETE
+
+- [x] TranscriptRecorder stage (`lib/agent_ex/loop/stages/transcript_recorder.ex`)
+- [x] Records `llm_response` and `tool_call` events via transcript backend
+- [x] No-op when no `transcript_backend` callback configured
+- [x] Added to all 4 profiles (after ModeRouter)
+- [x] `AgentEx.resume/1` with transcript reconstruction
+- [x] Rebuilds messages, turns_used, cost, tokens, plan from JSONL events
+- [x] TranscriptRecorder tests (5 tests)
+- [x] Resume tests (3 tests)
+
+---
+
+## V2.0 — COMPLETE
+
+- [x] Context fields: `subagent_depth`, `subagent_budget`, `parent_session_id`
+- [x] `AgentEx.Subagent.Coordinator` GenServer (per-workspace, Registry-backed)
+- [x] `AgentEx.Subagent.CoordinatorSupervisor` (DynamicSupervisor, lazy start)
+- [x] `AgentEx.Subagent.DelegateTask` tool definition + execution
+- [x] `delegate_task` tool wired into `Tools.definitions/0` and `Tools.execute/3`
+- [x] Max concurrent subagents: 5 per workspace
+- [x] Max subagent nesting depth: 3
+- [x] Default max_turns per subagent: 20 (configurable, max 50)
+- [x] Application starts Subagent Registry + CoordinatorSupervisor
+- [x] Coordinator tests (3 tests)
+- [x] DelegateTask tests (5 tests)
+
+---
+
+## V2.1 — COMPLETE
+
+- [x] `tool_permissions` context field (`%{tool_name => :auto | :approve | :deny}`)
+- [x] `:on_tool_approval` callback (`(name, input, ctx) -> :approved | :denied | {:approved_with_changes, new_input}`)
+- [x] Permission check in ToolExecutor before circuit breaker
+- [x] Wired `tool_permissions` option in `AgentEx.run/1`
+- [x] Tool permission tests (8 tests)
+
+---
+
+## Future
+
+- Mneme Knowledge backend (deferred — requires Mneme DB)
+- Async subagent execution (V3.0)
+- Mode switching mid-run
+- Per-tool approval gating with runtime approval flow for `:turn_by_turn`

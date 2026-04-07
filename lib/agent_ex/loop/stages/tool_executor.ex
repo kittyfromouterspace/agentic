@@ -63,38 +63,15 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
       tool_start_time = System.monotonic_time()
 
       {result, is_error, ctx} =
-        case CircuitBreaker.check(name) do
-          {:error, :circuit_open} ->
-            Logger.warning("CircuitBreaker: #{name} is open, skipping execution")
+        case check_permission(name, call["input"], ctx) do
+          :approved ->
+            execute_with_circuit_breaker(name, call["input"], ctx, execute_tool)
 
-            {"Tool temporarily unavailable (repeated failures). Try a different approach or wait a few minutes.",
-             true, ctx}
+          {:approved_with_changes, new_input} ->
+            execute_with_circuit_breaker(name, new_input, ctx, execute_tool)
 
-          :ok ->
-            try do
-              case execute_tool.(name, call["input"], ctx) do
-                {:ok, output} ->
-                  CircuitBreaker.record_success(name)
-                  {output, false, ctx}
-
-                {:ok, output, new_ctx} ->
-                  CircuitBreaker.record_success(name)
-                  {output, false, new_ctx}
-
-                {:error, reason} when is_binary(reason) ->
-                  CircuitBreaker.record_failure(name)
-                  {reason, true, ctx}
-
-                {:error, reason} ->
-                  CircuitBreaker.record_failure(name)
-                  {inspect(reason), true, ctx}
-              end
-            rescue
-              e ->
-                CircuitBreaker.record_failure(name)
-                Logger.error("Tool #{name} crashed: #{Exception.message(e)}")
-                {"Tool error: #{Exception.message(e)}", true, ctx}
-            end
+          :denied ->
+            {"Tool '#{name}' is not permitted in this session.", true, ctx}
         end
 
       Context.emit_event(ctx, {:tool_use, nil, workspace_id})
@@ -155,6 +132,63 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
          "is_error" => is_error
        }, ctx}
     end)
+  end
+
+  defp check_permission(name, input, ctx) do
+    case Map.get(ctx.tool_permissions, name, :auto) do
+      :auto ->
+        :approved
+
+      :deny ->
+        :denied
+
+      :approve ->
+        if cb = ctx.callbacks[:on_tool_approval] do
+          try do
+            cb.(name, input, ctx)
+          rescue
+            _ -> :approved
+          end
+        else
+          :approved
+        end
+    end
+  end
+
+  defp execute_with_circuit_breaker(name, input, ctx, execute_tool) do
+    case CircuitBreaker.check(name) do
+      {:error, :circuit_open} ->
+        Logger.warning("CircuitBreaker: #{name} is open, skipping execution")
+
+        {"Tool temporarily unavailable (repeated failures). Try a different approach or wait a few minutes.",
+         true, ctx}
+
+      :ok ->
+        try do
+          case execute_tool.(name, input, ctx) do
+            {:ok, output} ->
+              CircuitBreaker.record_success(name)
+              {output, false, ctx}
+
+            {:ok, output, new_ctx} ->
+              CircuitBreaker.record_success(name)
+              {output, false, new_ctx}
+
+            {:error, reason} when is_binary(reason) ->
+              CircuitBreaker.record_failure(name)
+              {reason, true, ctx}
+
+            {:error, reason} ->
+              CircuitBreaker.record_failure(name)
+              {inspect(reason), true, ctx}
+          end
+        rescue
+          e ->
+            CircuitBreaker.record_failure(name)
+            Logger.error("Tool #{name} crashed: #{Exception.message(e)}")
+            {"Tool error: #{Exception.message(e)}", true, ctx}
+        end
+    end
   end
 
   defp build_tool_result_message(results) do

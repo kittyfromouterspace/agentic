@@ -141,3 +141,54 @@
 - **Decision:** Integration tests for `:agentic_planned` and `:turn_by_turn` test stage interactions (PlanBuilder → ModeRouter → PlanTracker) rather than full `Engine.run` pipelines.
 - **Rationale:** `Engine.run` is a single-pass pipeline with no built-in looping. Multi-turn behavior requires `reentry_pipeline` which is set up by the host application, not the engine. Testing individual stage interactions validates the integration without fighting the engine's single-pass nature. CommitmentGate intercepts uncommitted "I will..." text, making full-pipeline tests fragile.
 - **Source:** Discovered during integration test writing.
+
+---
+
+## D018: LLMCall Cache Awareness — Stable Prefix Hash
+- **Date:** 2026-04-06
+- **Decision:** LLMCall separates messages into stable prefix (system message) and volatile suffix. Computes a SHA-256 hash of the prefix + tool definitions and passes it as `cache_control.stable_hash` in params to `llm_chat`. Stores the hash on `ctx.stable_prefix_hash`.
+- **Rationale:** Enables host applications to leverage provider-specific caching (Anthropic cache_control, OpenAI cached tokens). The host's `llm_chat` callback reads `cache_control.prefix_changed` to decide whether to set cache boundaries. Hash is truncated to 16 hex chars — sufficient for change detection, avoids bloating params.
+- **Alternatives:** Config-based cache hints, per-message cache markers. Stable hash is simpler and works with any provider.
+- **Source:** gap-analysis.md Component 2, implementation-plan.md V1.2
+
+---
+
+## D019: TranscriptRecorder Position — After ModeRouter
+- **Date:** 2026-04-06
+- **Decision:** TranscriptRecorder sits after ModeRouter in all profiles, before ToolExecutor (where present). For conversational mode, it's the final stage after ModeRouter.
+- **Rationale:** After ModeRouter, `ctx.last_response` is populated and `ctx.pending_tool_calls` may be set. This is the right moment to record both LLM responses and pending tool calls in a single pass. Recording before ToolExecutor captures tool calls before they're executed.
+- **Source:** implementation-plan.md V1.3
+
+---
+
+## D020: Resume Reconstructs Messages from Events
+- **Date:** 2026-04-06
+- **Decision:** `AgentEx.resume/1` loads JSONL events and reconstructs a compact message list. Tool call results are replaced with placeholder `"[result from previous session]"` since actual results are not stored in the transcript.
+- **Rationale:** Storing full tool output in transcripts would bloat JSONL files. The placeholder is sufficient for the LLM to understand context. The resumed session starts with a system message indicating continuation.
+- **Source:** persistence-strategy.md §4.2
+
+---
+
+## D021: Subagent Coordinator — Per-Workspace GenServer
+- **Date:** 2026-04-06
+- **Decision:** Per-workspace Coordinator GenServer registered via Registry. Lazy-started via DynamicSupervisor. Max 5 concurrent subagents. Task.async for subagent execution with GenServer.reply to deliver results.
+- **Rationale:** Follows the proven Homunculus Coordinator pattern. Registry enables O(1) lookup. DynamicSupervisor avoids pre-starting coordinators for every workspace. Task.async + handle_info({ref, result}) is idiomatic Elixir for supervised async work. The `from` tuple is stored for proper GenServer.reply.
+- **Alternatives:** Global coordinator with workspace routing, plain Task.Supervisor. Per-workspace GenServer provides clean isolation and concurrency limiting.
+- **Source:** porting-analysis.md §1.1, gap-analysis.md Component 6
+
+---
+
+## D022: Subagent Depth Limit — 3 Levels
+- **Date:** 2026-04-06
+- **Decision:** Maximum subagent nesting depth of 3. Checked in DelegateTask.execute before spawning. Subagents cannot delegate.
+- **Rationale:** Prevents runaway recursion. Depth 3 means: main agent → subagent → sub-subagent → sub-sub-subagent. Beyond this, exponential resource consumption is a real risk. The limit is hardcoded but could be made configurable.
+- **Source:** gap-analysis.md Component 6, porting-analysis.md §1.1
+
+---
+
+## D023: Tool Permission Model — Map with Three Levels
+- **Date:** 2026-04-06
+- **Decision:** `ctx.tool_permissions` is a map from tool name to `:auto` (default, execute immediately), `:approve` (call `on_tool_approval` callback), or `:deny` (reject). Tools not in the map default to `:auto`.
+- **Rationale:** Three levels cover the common scenarios: unrestricted tools (`:auto`), dangerous tools needing approval (`:approve`), and forbidden tools (`:deny`). The `on_tool_approval` callback can return modified input via `{:approved_with_changes, new_input}`, enabling input sanitization. Default to `:auto` for backward compatibility.
+- **Alternatives:** Binary allow/deny, role-based permissions. The three-level model is simpler and sufficient for V2.1.
+- **Source:** gap-analysis.md Component 3, implementation-plan.md V2.1

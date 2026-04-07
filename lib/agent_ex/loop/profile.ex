@@ -22,6 +22,7 @@ defmodule AgentEx.Loop.Profile do
       Stages.ProgressInjector,
       Stages.LLMCall,
       Stages.ModeRouter,
+      Stages.TranscriptRecorder,
       Stages.ToolExecutor,
       Stages.CommitmentGate
     ]
@@ -35,6 +36,7 @@ defmodule AgentEx.Loop.Profile do
       Stages.ProgressInjector,
       Stages.LLMCall,
       Stages.ModeRouter,
+      Stages.TranscriptRecorder,
       Stages.ToolExecutor,
       Stages.PlanTracker,
       Stages.CommitmentGate
@@ -47,6 +49,7 @@ defmodule AgentEx.Loop.Profile do
       Stages.ContextGuard,
       Stages.LLMCall,
       Stages.ModeRouter,
+      Stages.TranscriptRecorder,
       Stages.HumanCheckpoint,
       Stages.ToolExecutor,
       Stages.CommitmentGate
@@ -57,7 +60,8 @@ defmodule AgentEx.Loop.Profile do
     [
       Stages.ContextGuard,
       Stages.LLMCall,
-      Stages.ModeRouter
+      Stages.ModeRouter,
+      Stages.TranscriptRecorder
     ]
   end
 

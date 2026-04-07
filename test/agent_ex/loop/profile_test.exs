@@ -4,44 +4,48 @@ defmodule AgentEx.Loop.ProfileTest do
   alias AgentEx.Loop.Profile
 
   describe "stages/1" do
-    test "agentic profile has 6 stages" do
+    test "agentic profile has 7 stages" do
       stages = Profile.stages(:agentic)
-      assert length(stages) == 6
+      assert length(stages) == 7
 
       assert AgentEx.Loop.Stages.ContextGuard in stages
       assert AgentEx.Loop.Stages.ProgressInjector in stages
       assert AgentEx.Loop.Stages.LLMCall in stages
       assert AgentEx.Loop.Stages.ModeRouter in stages
+      assert AgentEx.Loop.Stages.TranscriptRecorder in stages
       assert AgentEx.Loop.Stages.ToolExecutor in stages
       assert AgentEx.Loop.Stages.CommitmentGate in stages
     end
 
-    test "agentic_planned profile has 9 stages" do
+    test "agentic_planned profile has 10 stages" do
       stages = Profile.stages(:agentic_planned)
-      assert length(stages) == 9
+      assert length(stages) == 10
 
       assert AgentEx.Loop.Stages.WorkspaceSnapshot in stages
       assert AgentEx.Loop.Stages.PlanBuilder in stages
       assert AgentEx.Loop.Stages.PlanTracker in stages
       assert AgentEx.Loop.Stages.ModeRouter in stages
+      assert AgentEx.Loop.Stages.TranscriptRecorder in stages
     end
 
-    test "turn_by_turn profile has 7 stages" do
+    test "turn_by_turn profile has 8 stages" do
       stages = Profile.stages(:turn_by_turn)
-      assert length(stages) == 7
+      assert length(stages) == 8
 
       assert AgentEx.Loop.Stages.WorkspaceSnapshot in stages
       assert AgentEx.Loop.Stages.HumanCheckpoint in stages
       assert AgentEx.Loop.Stages.ModeRouter in stages
+      assert AgentEx.Loop.Stages.TranscriptRecorder in stages
     end
 
-    test "conversational profile has 3 stages" do
+    test "conversational profile has 4 stages" do
       stages = Profile.stages(:conversational)
-      assert length(stages) == 3
+      assert length(stages) == 4
 
       assert AgentEx.Loop.Stages.ContextGuard in stages
       assert AgentEx.Loop.Stages.LLMCall in stages
       assert AgentEx.Loop.Stages.ModeRouter in stages
+      assert AgentEx.Loop.Stages.TranscriptRecorder in stages
     end
 
     test "unknown profile falls back to agentic" do

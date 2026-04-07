@@ -48,6 +48,17 @@ defmodule AgentEx.Loop.Context do
     workspace_snapshot: nil,
     file_reads: %{},
 
+    # Cache awareness (V1.2)
+    stable_prefix_hash: nil,
+
+    # Subagent support (V2.0)
+    subagent_depth: 0,
+    subagent_budget: nil,
+    parent_session_id: nil,
+
+    # Tool permissions (V2.1)
+    tool_permissions: %{},
+
     # Cost tracking
     total_cost: 0.0,
     total_tokens: 0,
@@ -100,6 +111,11 @@ defmodule AgentEx.Loop.Context do
           pending_human_response: boolean(),
           workspace_snapshot: String.t() | nil,
           file_reads: %{String.t() => %{hash: String.t(), last_read_turn: non_neg_integer()}},
+          stable_prefix_hash: String.t() | nil,
+          subagent_depth: non_neg_integer(),
+          subagent_budget: float() | nil,
+          parent_session_id: String.t() | nil,
+          tool_permissions: %{String.t() => :auto | :approve | :deny},
           total_cost: float(),
           total_tokens: non_neg_integer(),
           model_tier: atom(),

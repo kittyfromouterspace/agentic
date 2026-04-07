@@ -12,6 +12,7 @@ defmodule AgentEx.Tools do
   alias __MODULE__.Gateway
   alias __MODULE__.Memory
   alias __MODULE__.Skill
+  alias AgentEx.Subagent.DelegateTask
 
   require Logger
 
@@ -25,7 +26,8 @@ defmodule AgentEx.Tools do
   ]
 
   def definitions do
-    file_tools() ++ Enum.flat_map(@extension_modules, & &1.definitions())
+    file_tools() ++
+      [DelegateTask.definition()] ++ Enum.flat_map(@extension_modules, & &1.definitions())
   end
 
   defp file_tools do
@@ -117,6 +119,10 @@ defmodule AgentEx.Tools do
       when tool_name in ~w(read_file write_file edit_file bash list_files) do
     workspace = ctx.metadata[:workspace] || ctx.metadata["workspace"]
     execute_file_tool(tool_name, input, workspace)
+  end
+
+  def execute("delegate_task", input, ctx) do
+    DelegateTask.execute(input, ctx)
   end
 
   def execute(tool_name, input, ctx) do

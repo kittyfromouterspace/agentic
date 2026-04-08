@@ -22,11 +22,19 @@ defmodule AgentEx.LLM.Transport do
         tools: [%{name: ..., description: ..., input_schema: ...}],
         max_tokens: pos_integer() | nil,
         temperature: float() | nil,
-        tool_choice: nil | :auto | :none | :any | %{name: String.t()}
+        tool_choice: nil | :auto | :none | :any | %{name: String.t()},
+        cache_control: nil | %{
+          stable_hash: String.t(),
+          prefix_changed: boolean()
+        }
       }
 
   Transports MUST tolerate missing optional keys (`tools`, `system`,
-  `tool_choice`, `temperature`) by treating them as absent.
+  `tool_choice`, `temperature`, `cache_control`) by treating them
+  as absent. Transports that don't implement provider-side prompt
+  caching ignore `cache_control` entirely; transports that do (e.g.
+  `AgentEx.LLM.Transport.AnthropicMessages`) read `prefix_changed`
+  to decide whether to mark cache breakpoints in the request body.
 
   ## Opts
 
@@ -54,7 +62,8 @@ defmodule AgentEx.LLM.Transport do
           optional(:tools) => list(),
           optional(:max_tokens) => pos_integer() | nil,
           optional(:temperature) => float() | nil,
-          optional(:tool_choice) => term()
+          optional(:tool_choice) => term(),
+          optional(:cache_control) => map() | nil
         }
 
   @type request :: %{

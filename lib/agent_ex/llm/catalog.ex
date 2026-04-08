@@ -273,9 +273,24 @@ defmodule AgentEx.LLM.Catalog do
     dir = Path.dirname(path)
     unless File.dir?(dir), do: File.mkdir_p!(dir)
 
+    # Atomic write: stage to a tempfile in the same directory, then
+    # rename. Crash mid-write leaves the previous catalog intact rather
+    # than truncating to garbage.
     case Jason.encode(data, pretty: true) do
-      {:ok, json} -> File.write(path, json)
-      _ -> :ok
+      {:ok, json} ->
+        tmp = path <> ".tmp"
+
+        with :ok <- File.write(tmp, json),
+             :ok <- File.rename(tmp, path) do
+          :ok
+        else
+          _ ->
+            File.rm(tmp)
+            :ok
+        end
+
+      _ ->
+        :ok
     end
   rescue
     e -> Logger.warning("Catalog: failed to save: #{Exception.message(e)}")

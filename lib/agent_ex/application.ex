@@ -12,8 +12,7 @@ defmodule AgentEx.Application do
       AgentEx.LLM.ProviderRegistry,
       AgentEx.LLM.Catalog,
       AgentEx.LLM.UsageManager,
-      AgentEx.ModelRouter,
-      AgentEx.ModelRouter.Free
+      AgentEx.ModelRouter
     ]
 
     opts = [strategy: :one_for_one, name: AgentEx.Supervisor]

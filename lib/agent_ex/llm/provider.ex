@@ -120,9 +120,21 @@ defmodule AgentEx.LLM.Provider do
       tools: get(params, "tools", :tools, []) || [],
       max_tokens: get(params, "max_tokens", :max_tokens, nil),
       temperature: get(params, "temperature", :temperature, nil),
-      tool_choice: get(params, "tool_choice", :tool_choice, nil)
+      tool_choice: get(params, "tool_choice", :tool_choice, nil),
+      cache_control: normalize_cache_control(get(params, "cache_control", :cache_control, nil))
     }
   end
+
+  defp normalize_cache_control(nil), do: nil
+
+  defp normalize_cache_control(%{} = m) do
+    %{
+      stable_hash: m["stable_hash"] || m[:stable_hash],
+      prefix_changed: m["prefix_changed"] || m[:prefix_changed] || false
+    }
+  end
+
+  defp normalize_cache_control(_), do: nil
 
   defp get(map, str_key, atom_key, default) do
     case Map.get(map, str_key) do

@@ -26,8 +26,19 @@ defmodule AgentEx.LLM.Transport.AnthropicMessages do
 
     url = String.trim_trailing(base_url, "/") <> "/messages"
 
+    cache_enabled = cache_breakpoint_enabled?(Map.get(params, :cache_control))
+
     messages = transform_messages(Map.get(params, :messages, []))
-    tools = transform_tools(Map.get(params, :tools, []))
+    tools =
+      params
+      |> Map.get(:tools, [])
+      |> transform_tools()
+      |> apply_tool_cache_control(cache_enabled)
+
+    system =
+      params
+      |> Map.get(:system)
+      |> apply_system_cache_control(cache_enabled)
 
     body =
       %{
@@ -35,7 +46,7 @@ defmodule AgentEx.LLM.Transport.AnthropicMessages do
         max_tokens: Map.get(params, :max_tokens) || 4096,
         messages: messages
       }
-      |> maybe_put(:system, Map.get(params, :system))
+      |> maybe_put(:system, system)
       |> maybe_put(:temperature, Map.get(params, :temperature))
       |> maybe_put(:tools, if(tools == [], do: nil, else: tools))
       |> maybe_put(:tool_choice, Map.get(params, :tool_choice))
@@ -49,6 +60,68 @@ defmodule AgentEx.LLM.Transport.AnthropicMessages do
 
     %{method: :post, url: url, body: body, headers: headers}
   end
+
+  # Cache is enabled when the caller flagged the prefix as unchanged
+  # from last call. The first call after prefix changes won't have a
+  # cache breakpoint set; the second and subsequent calls will, which
+  # is exactly when Anthropic's prompt cache pays off.
+  defp cache_breakpoint_enabled?(%{prefix_changed: false}), do: true
+  defp cache_breakpoint_enabled?(%{"prefix_changed" => false}), do: true
+  defp cache_breakpoint_enabled?(_), do: false
+
+  # System prompt: wrap a string into the structured form Anthropic
+  # accepts (`[%{type: "text", text: ..., cache_control: ...}]`) so
+  # we can mark a cache breakpoint on it.
+  defp apply_system_cache_control(nil, _enabled), do: nil
+  defp apply_system_cache_control("", _enabled), do: nil
+
+  defp apply_system_cache_control(text, true) when is_binary(text) do
+    [%{"type" => "text", "text" => text, "cache_control" => %{"type" => "ephemeral"}}]
+  end
+
+  defp apply_system_cache_control(text, false) when is_binary(text), do: text
+
+  defp apply_system_cache_control(blocks, true) when is_list(blocks) do
+    case blocks do
+      [] ->
+        []
+
+      list ->
+        last = List.last(list)
+        new_last = Map.put(last, "cache_control", %{"type" => "ephemeral"})
+        List.replace_at(list, length(list) - 1, new_last)
+    end
+  end
+
+  defp apply_system_cache_control(blocks, false) when is_list(blocks), do: blocks
+  defp apply_system_cache_control(other, _), do: other
+
+  # Tools: cache_control on the LAST tool definition tells Anthropic
+  # to cache everything up through the tools section. The tools list
+  # changes far less often than messages, so this is high-leverage.
+  defp apply_tool_cache_control([], _enabled), do: []
+
+  defp apply_tool_cache_control(tools, true) when is_list(tools) do
+    last = List.last(tools)
+
+    # Mark the cache breakpoint on the last tool, using whichever key
+    # convention the tool already uses. JSON-encoding both produces
+    # `"cache_control"` on the wire.
+    new_last =
+      if is_map(last) do
+        if Map.has_key?(last, :name) do
+          Map.put(last, :cache_control, %{type: "ephemeral"})
+        else
+          Map.put(last, "cache_control", %{"type" => "ephemeral"})
+        end
+      else
+        last
+      end
+
+    List.replace_at(tools, length(tools) - 1, new_last)
+  end
+
+  defp apply_tool_cache_control(tools, false), do: tools
 
   @impl true
   def parse_chat_response(200, body, _headers) when is_map(body) do

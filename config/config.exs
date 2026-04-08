@@ -6,7 +6,8 @@ config :agent_ex,
     AgentEx.LLM.Provider.Anthropic,
     AgentEx.LLM.Provider.OpenAI,
     AgentEx.LLM.Provider.OpenRouter,
-    AgentEx.LLM.Provider.Groq
+    AgentEx.LLM.Provider.Groq,
+    AgentEx.LLM.Provider.Ollama
   ],
   catalog: [
     persist_path: "~/.worth/catalog.json",

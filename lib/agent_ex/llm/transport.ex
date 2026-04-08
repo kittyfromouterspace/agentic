@@ -72,4 +72,33 @@ defmodule AgentEx.LLM.Transport do
               {:ok, Response.t()} | {:error, Error.t()}
 
   @callback parse_rate_limit(term()) :: RateLimit.t() | nil
+
+  @doc """
+  Optional embedding callbacks. A transport that does not implement
+  these will not be usable for embedding requests.
+
+  ## Opts (build_embedding_request/2)
+
+    * `:base_url`      — required, fully-qualified provider base URL
+    * `:api_key`       — required, raw bearer / api key value
+    * `:model`         — required, embedding model id
+    * `:extra_headers` — optional, list of extra `{name, value}` tuples
+
+  ## Response shape
+
+  `parse_embedding_response/3` always returns a list of vectors,
+  even when the original input was a single string. The caller is
+  responsible for indexing into the list when it knows it submitted
+  a single text.
+  """
+  @callback build_embedding_request(text_or_list :: String.t() | [String.t()], opts :: keyword()) ::
+              request() | :not_supported
+
+  @callback parse_embedding_response(
+              status :: non_neg_integer(),
+              body :: term(),
+              headers :: term()
+            ) :: {:ok, [[float()]]} | {:error, Error.t()} | :not_supported
+
+  @optional_callbacks build_embedding_request: 2, parse_embedding_response: 3
 end

@@ -122,6 +122,58 @@ defmodule AgentEx.LLM.Transport.OpenAIChatCompletions do
   end
 
   @impl true
+  def build_embedding_request(text_or_list, opts) do
+    base_url = Keyword.fetch!(opts, :base_url)
+    api_key = Keyword.fetch!(opts, :api_key)
+    model = Keyword.fetch!(opts, :model)
+    extra_headers = Keyword.get(opts, :extra_headers, [])
+
+    url = String.trim_trailing(base_url, "/") <> "/embeddings"
+
+    body = %{
+      model: model,
+      input: text_or_list,
+      encoding_format: "float"
+    }
+
+    headers =
+      [
+        {"Authorization", "Bearer #{api_key}"},
+        {"content-type", "application/json"}
+      ] ++ extra_headers
+
+    %{method: :post, url: url, body: body, headers: headers}
+  end
+
+  @impl true
+  def parse_embedding_response(200, body, _headers) when is_map(body) do
+    vectors =
+      (body["data"] || [])
+      |> Enum.sort_by(fn d -> d["index"] || 0 end)
+      |> Enum.map(fn d -> d["embedding"] || [] end)
+
+    {:ok, vectors}
+  end
+
+  def parse_embedding_response(status, body, headers) do
+    rate = parse_rate_limit(headers)
+    retry_after_ms = parse_retry_after(headers, status)
+    message = error_message(body)
+
+    {classification, _retry} = ErrorClassifier.classify(status, message, headers)
+
+    {:error,
+     %Error{
+       message: "OpenAI embeddings error (#{status}): #{message}",
+       status: status,
+       retry_after_ms: retry_after_ms,
+       rate_limit: rate,
+       classification: classification,
+       raw: body
+     }}
+  end
+
+  @impl true
   def parse_rate_limit(headers) do
     %RateLimit{
       limit: parse_int_header(headers, "x-ratelimit-limit"),

@@ -11,6 +11,7 @@ defmodule AgentEx.Application do
       AgentEx.Subagent.CoordinatorSupervisor,
       AgentEx.LLM.ProviderRegistry,
       AgentEx.LLM.Catalog,
+      AgentEx.LLM.UsageManager,
       AgentEx.ModelRouter,
       AgentEx.ModelRouter.Free
     ]

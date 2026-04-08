@@ -9,7 +9,7 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
 
   @behaviour AgentEx.LLM.Provider
 
-  alias AgentEx.LLM.{Credentials, Model}
+  alias AgentEx.LLM.{Credentials, Model, Usage, UsageWindow}
 
   @default_base_url "https://openrouter.ai/api/v1"
 
@@ -58,13 +58,36 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
 
   @impl true
   def fetch_catalog(%Credentials{api_key: api_key} = _creds) when is_binary(api_key) and api_key != "" do
-    url = "#{@default_base_url}/models"
-
     headers = [
       {"Authorization", "Bearer #{api_key}"},
       {"content-type", "application/json"}
     ]
 
+    with {:ok, chat_models} <- fetch_models("#{@default_base_url}/models", headers) do
+      embedding_models =
+        case fetch_models("#{@default_base_url}/models?output_modalities=embeddings", headers) do
+          {:ok, models} ->
+            Enum.map(models, fn m -> %{m | capabilities: MapSet.put(m.capabilities, :embeddings)} end)
+
+          {:error, reason} ->
+            require Logger
+            Logger.warning("OpenRouter embedding catalog fetch failed: #{inspect(reason)}")
+            []
+        end
+
+      merged =
+        (chat_models ++ embedding_models)
+        |> Enum.uniq_by(& &1.id)
+
+      {:ok, merged}
+    end
+  rescue
+    e -> {:error, Exception.message(e)}
+  end
+
+  def fetch_catalog(_), do: :not_supported
+
+  defp fetch_models(url, headers) do
     case Req.get(url, headers: headers, receive_timeout: 15_000) do
       {:ok, %{status: 200, body: %{"data" => models}}} ->
         parsed =
@@ -80,11 +103,7 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
       {:error, reason} ->
         {:error, reason}
     end
-  rescue
-    e -> {:error, Exception.message(e)}
   end
-
-  def fetch_catalog(_), do: :not_supported
 
   @impl true
   def fetch_usage(%Credentials{api_key: api_key} = _creds) when is_binary(api_key) and api_key != "" do
@@ -96,8 +115,11 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
     ]
 
     case Req.get(url, headers: headers, receive_timeout: 10_000) do
-      {:ok, %{status: 200, body: body}} ->
-        {:ok, body}
+      {:ok, %{status: 200, body: %{"data" => data}}} when is_map(data) ->
+        {:ok, parse_usage(data)}
+
+      {:ok, %{status: 200, body: body}} when is_map(body) ->
+        {:ok, parse_usage(body)}
 
       _ ->
         :not_supported
@@ -110,6 +132,42 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
 
   @impl true
   def classify_http_error(_status, _body, _headers), do: :default
+
+  defp parse_usage(data) do
+    used = (data["usage"] || 0.0) / 1.0
+    limit = data["limit"]
+
+    credits =
+      if is_number(limit) do
+        %{used: used, limit: limit / 1.0}
+      else
+        nil
+      end
+
+    windows =
+      case data["rate_limit"] do
+        %{"requests" => requests, "interval" => interval} when is_number(requests) ->
+          [
+            %UsageWindow{
+              label: "rate (#{interval})",
+              limit: requests / 1.0,
+              unit: :requests
+            }
+          ]
+
+        _ ->
+          []
+      end
+
+    %Usage{
+      provider: :openrouter,
+      label: "OpenRouter",
+      plan: data["label"],
+      windows: windows,
+      credits: credits,
+      fetched_at: System.system_time(:millisecond)
+    }
+  end
 
   defp parse_model(raw) do
     id = raw["id"]

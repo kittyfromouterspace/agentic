@@ -71,15 +71,38 @@ defmodule AgentEx.Loop.Stages.LLMCall do
         duration = System.monotonic_time() - start_time
         usage = response["usage"] || %{}
 
+        input_tokens = usage["input_tokens"] || 0
+        output_tokens = usage["output_tokens"] || 0
+        cache_read = usage["cache_read"] || usage["cache_read_input_tokens"] || 0
+        cache_write = usage["cache_write"] || usage["cache_creation_input_tokens"] || 0
+
+        cost_usd =
+          response["cost"] ||
+            compute_cost(used_route, %{
+              input_tokens: input_tokens,
+              output_tokens: output_tokens,
+              cache_read: cache_read,
+              cache_write: cache_write
+            })
+
+        response = Map.put(response, "cost", cost_usd)
+
         AgentEx.Telemetry.event(
           [:llm_call, :stop],
           %{
             duration: duration,
-            input_tokens: usage["input_tokens"] || 0,
-            output_tokens: usage["output_tokens"] || 0,
-            cost_usd: response["cost"] || 0.0
+            input_tokens: input_tokens,
+            output_tokens: output_tokens,
+            cache_read: cache_read,
+            cache_write: cache_write,
+            cost_usd: cost_usd
           },
-          %{model_tier: tier, session_id: ctx.session_id, route: used_route && used_route.model_id}
+          %{
+            model_tier: tier,
+            session_id: ctx.session_id,
+            route: used_route && used_route[:model_id],
+            provider: used_route && used_route[:provider_name]
+          }
         )
 
         ctx = Context.track_usage(ctx, response)
@@ -97,6 +120,45 @@ defmodule AgentEx.Loop.Stages.LLMCall do
         Logger.error("LLMCall failed: #{inspect(reason)}")
         {:error, reason}
     end
+  end
+
+  # Compute USD cost from a route + token usage by looking the model
+  # up in the catalog. Returns 0.0 when the route, model, or pricing
+  # is unknown — telemetry stays well-formed.
+  defp compute_cost(nil, _usage), do: 0.0
+
+  defp compute_cost(route, usage) when is_map(route) do
+    cost = route[:cost] || (route_model(route) || %{})[:cost]
+
+    case cost do
+      %{} = cost ->
+        in_per = (usage.input_tokens || 0) / 1_000_000
+        out_per = (usage.output_tokens || 0) / 1_000_000
+        cache_read_per = (usage.cache_read || 0) / 1_000_000
+        cache_write_per = (usage.cache_write || 0) / 1_000_000
+
+        (cost[:input] || cost["input"] || 0.0) * in_per +
+          (cost[:output] || cost["output"] || 0.0) * out_per +
+          (cost[:cache_read] || cost["cache_read"] || 0.0) * cache_read_per +
+          (cost[:cache_write] || cost["cache_write"] || 0.0) * cache_write_per
+
+      _ ->
+        0.0
+    end
+  end
+
+  defp compute_cost(_, _), do: 0.0
+
+  defp route_model(%{provider_name: name, model_id: id}) when is_binary(name) and is_binary(id) do
+    AgentEx.LLM.Catalog.lookup(safe_atom(name), id)
+  end
+
+  defp route_model(_), do: nil
+
+  defp safe_atom(name) when is_binary(name) do
+    String.to_existing_atom(name)
+  rescue
+    ArgumentError -> nil
   end
 
   # Walk every healthy route for the tier in priority order. On success

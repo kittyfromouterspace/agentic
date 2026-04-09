@@ -37,11 +37,15 @@ defmodule AgentEx.Loop.Stages.LLMCall do
   @impl true
   def call(%Context{} = ctx, next) do
     tier = ctx.model_tier || :primary
+    selection_mode = Map.get(ctx, :model_selection_mode, :manual)
 
-    Logger.debug("LLMCall: turn #{ctx.turns_used + 1}/#{ctx.config.max_turns} for #{ctx.session_id} (tier: #{tier})")
+    Logger.debug(
+      "LLMCall: turn #{ctx.turns_used + 1}/#{ctx.config.max_turns} for #{ctx.session_id} (mode: #{selection_mode}, tier: #{tier})"
+    )
 
     AgentEx.Telemetry.event([:llm_call, :start], %{}, %{
       session_id: ctx.session_id,
+      model_selection_mode: selection_mode,
       model_tier: tier
     })
 
@@ -64,7 +68,11 @@ defmodule AgentEx.Loop.Stages.LLMCall do
     llm_chat = ctx.callbacks[:llm_chat] || fn _ -> {:error, :no_llm_adapter} end
     start_time = System.monotonic_time()
 
-    {result, used_route} = try_routes_for_tier(tier, base_params, llm_chat, ctx)
+    {result, used_route} =
+      case selection_mode do
+        :auto -> try_auto_routes(ctx, base_params, llm_chat)
+        _ -> try_routes_for_tier(tier, base_params, llm_chat, ctx)
+      end
 
     case result do
       {:ok, response} ->
@@ -99,6 +107,7 @@ defmodule AgentEx.Loop.Stages.LLMCall do
           },
           %{
             model_tier: tier,
+            model_selection_mode: selection_mode,
             session_id: ctx.session_id,
             route: used_route && used_route[:model_id],
             provider: used_route && used_route[:provider_name]
@@ -161,6 +170,57 @@ defmodule AgentEx.Loop.Stages.LLMCall do
     ArgumentError -> nil
   end
 
+  defp try_auto_routes(ctx, base_params, llm_chat) do
+    case ModelRouter.resolve_for_context(ctx) do
+      {:ok, routes, analysis} when is_list(routes) ->
+        if analysis do
+          Logger.debug(
+            "LLMCall: auto mode selected model (complexity: #{analysis.complexity}, " <>
+              "vision: #{analysis.needs_vision}, reasoning: #{analysis.needs_reasoning})"
+          )
+
+          AgentEx.Telemetry.event([:model_router, :auto, :selected], %{}, %{
+            session_id: ctx.session_id,
+            complexity: analysis.complexity,
+            needs_vision: analysis.needs_vision,
+            needs_audio: analysis.needs_audio,
+            needs_reasoning: analysis.needs_reasoning,
+            needs_large_context: analysis.needs_large_context,
+            estimated_input_tokens: analysis.estimated_input_tokens,
+            preference: ctx.model_preference,
+            selected_model: (List.first(routes) || %{})[:model_id],
+            selected_provider: (List.first(routes) || %{})[:provider_name]
+          })
+        end
+
+        do_try_routes(routes, :auto, base_params, llm_chat, ctx, nil)
+
+      {:error, reason} ->
+        Logger.warning(
+          "LLMCall: auto route resolution failed (#{inspect(reason)}), falling back to tier-based"
+        )
+
+        AgentEx.Telemetry.event([:model_router, :auto, :fallback], %{}, %{
+          session_id: ctx.session_id,
+          reason: inspect(reason)
+        })
+
+        try_routes_for_tier(ctx.model_tier || :primary, base_params, llm_chat, ctx)
+    end
+  rescue
+    e ->
+      Logger.warning(
+        "LLMCall: auto route resolution crashed: #{Exception.message(e)}, falling back to tier-based"
+      )
+
+      AgentEx.Telemetry.event([:model_router, :auto, :fallback], %{}, %{
+        session_id: ctx.session_id,
+        reason: Exception.message(e)
+      })
+
+      try_routes_for_tier(ctx.model_tier || :primary, base_params, llm_chat, ctx)
+  end
+
   # Walk every healthy route for the tier in priority order. On success
   # we report the route to ModelRouter and stop. On error we classify,
   # report the failure (which puts the route in cooldown if the error
@@ -184,7 +244,9 @@ defmodule AgentEx.Loop.Stages.LLMCall do
   end
 
   defp do_try_routes([route | rest], tier, base_params, llm_chat, ctx, _last) do
-    Logger.debug("LLMCall: trying route #{route.provider_name}/#{route.model_id} (source: #{route.source})")
+    Logger.debug(
+      "LLMCall: trying route #{route.provider_name}/#{route.model_id} (source: #{route.source})"
+    )
 
     Context.emit_event(
       ctx,
@@ -226,7 +288,10 @@ defmodule AgentEx.Loop.Stages.LLMCall do
         routes
 
       other ->
-        Logger.warning("LLMCall: resolve_all returned #{inspect(other)}, proceeding without routes")
+        Logger.warning(
+          "LLMCall: resolve_all returned #{inspect(other)}, proceeding without routes"
+        )
+
         []
     end
   rescue
@@ -243,8 +308,12 @@ defmodule AgentEx.Loop.Stages.LLMCall do
 
   defp classify_error({:error, %{status: 429}}), do: :rate_limit
   defp classify_error({:error, %{status: status}}) when status in [401, 403], do: :auth_error
-  defp classify_error({:error, %{status: status}}) when is_integer(status) and status >= 500, do: :other
-  defp classify_error({:error, %{message: msg}}) when is_binary(msg), do: classify_error({:error, msg})
+
+  defp classify_error({:error, %{status: status}}) when is_integer(status) and status >= 500,
+    do: :other
+
+  defp classify_error({:error, %{message: msg}}) when is_binary(msg),
+    do: classify_error({:error, msg})
 
   defp classify_error({:error, reason}) when is_binary(reason) do
     cond do

@@ -1,44 +1,179 @@
 defmodule AgentEx.ModelRouter do
   @moduledoc """
-  Smart model routing for AgentEx.
+  Smart model routing for AgentEx with two selection modes.
 
-  Queries `AgentEx.LLM.Catalog` for available models filtered by tier
-  and capability tags, then enriches them with health/cooldown state
-  from the ETS-backed cooldown table.
+  ## Modes
 
-  The `llm_chat` callback receives resolved route info in params under
-  `"_route"`, allowing the host to route to the correct provider.
+    * `:manual` — the caller picks a tier (`:primary`, `:lightweight`) and
+      the router resolves the best route from the catalog. This is the
+      legacy behaviour and the default.
+    * `:auto` — the router analyses the request using a fast/free model,
+      determines complexity and required capabilities, then selects the
+      best model based on user preference (`:optimize_price` or
+      `:optimize_speed`).
+
+  ## Auto mode flow
+
+      1. `Analyzer.analyze/2` classifies the request (complexity, capabilities)
+      2. `Selector.select/3` scores all catalog models using the analysis
+         and user preference
+      3. The best-scoring model is returned as a route
+
+  ## Manual mode flow
+
+      1. Caller provides a `tier` (`:primary`, `:lightweight`, `:any`)
+      2. Router queries the catalog, sorts by priority, returns healthy routes
   """
 
   use GenServer
 
+  alias AgentEx.LLM.Catalog
+  alias AgentEx.LLM.Model
+  alias AgentEx.ModelRouter.{Preference, Selector}
+
   require Logger
 
   @health_table :agent_ex_route_health
+
+  @type selection_mode :: :manual | :auto
 
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
   @doc """
-  Resolve the best route for a tier.
+  Auto-select the best model for a request given a user preference.
 
-  Queries the catalog, sorts by priority, and returns the first healthy route.
+  Returns `{:ok, route, analysis}` or `{:error, reason}`.
   """
+  def auto_select(request, preference \\ Preference.default(), opts \\ []) do
+    GenServer.call(__MODULE__, {:auto_select, request, preference, opts})
+  catch
+    :exit, _ -> {:error, :router_unavailable}
+  end
+
+  @doc "Resolve the best route for a tier (manual mode)."
   def resolve(tier) do
     GenServer.call(__MODULE__, {:resolve, tier})
   catch
     :exit, _ -> {:error, :router_unavailable}
   end
 
-  @doc """
-  Get all available routes for a tier, ordered by priority.
-  Queries the catalog for models with the right tier and capabilities.
-  """
+  @doc "Get all available routes for a tier (manual mode)."
   def resolve_all(tier) do
     GenServer.call(__MODULE__, {:resolve_all, tier})
   catch
     :exit, _ -> {:error, :router_unavailable}
+  end
+
+  @doc """
+  Resolve routes for a context — dispatches to auto or manual based on
+  `ctx.model_selection_mode`.
+  """
+  def resolve_for_context(ctx) do
+    mode = Map.get(ctx, :model_selection_mode, :manual)
+    session_id = Map.get(ctx, :session_id)
+
+    start_time = System.monotonic_time()
+
+    AgentEx.Telemetry.event([:model_router, :resolve, :start], %{}, %{
+      session_id: session_id,
+      selection_mode: mode
+    })
+
+    result =
+      case mode do
+        :auto ->
+          preference = Map.get(ctx, :model_preference, Preference.default())
+          request = extract_request(ctx)
+          llm_chat = (ctx.callbacks || %{})[:llm_chat]
+          context_summary = build_context_summary(ctx)
+
+          opts = [
+            llm_chat: llm_chat,
+            context_summary: context_summary,
+            session_id: session_id
+          ]
+
+          case Selector.select(request, preference, opts) do
+            {:ok, {model, analysis}} ->
+              route = model_to_route(model)
+
+              AgentEx.Telemetry.event(
+                [:model_router, :resolve, :stop],
+                %{
+                  duration: System.monotonic_time() - start_time,
+                  route_count: 1
+                },
+                %{
+                  session_id: session_id,
+                  selection_mode: :auto,
+                  preference: preference,
+                  selected_provider: model.provider,
+                  selected_model_id: model.id,
+                  complexity: analysis.complexity,
+                  needs_vision: analysis.needs_vision,
+                  needs_reasoning: analysis.needs_reasoning
+                }
+              )
+
+              {:ok, [route], analysis}
+
+            {:error, reason} ->
+              AgentEx.Telemetry.event(
+                [:model_router, :resolve, :stop],
+                %{
+                  duration: System.monotonic_time() - start_time
+                },
+                %{
+                  session_id: session_id,
+                  selection_mode: :auto,
+                  error: reason
+                }
+              )
+
+              {:error, reason}
+          end
+
+        :manual ->
+          tier = Map.get(ctx, :model_tier, :primary)
+
+          case resolve_all(tier) do
+            {:ok, routes} ->
+              AgentEx.Telemetry.event(
+                [:model_router, :resolve, :stop],
+                %{
+                  duration: System.monotonic_time() - start_time,
+                  route_count: length(routes)
+                },
+                %{
+                  session_id: session_id,
+                  selection_mode: :manual,
+                  tier: tier
+                }
+              )
+
+              {:ok, routes, nil}
+
+            error ->
+              AgentEx.Telemetry.event(
+                [:model_router, :resolve, :stop],
+                %{
+                  duration: System.monotonic_time() - start_time
+                },
+                %{
+                  session_id: session_id,
+                  selection_mode: :manual,
+                  tier: tier,
+                  error: true
+                }
+              )
+
+              error
+          end
+      end
+
+    result
   end
 
   @doc "Report a successful call for a route."
@@ -46,9 +181,7 @@ defmodule AgentEx.ModelRouter do
     GenServer.cast(__MODULE__, {:report_success, provider_name, model_id})
   end
 
-  @doc """
-  Report a failed call for a route.
-  """
+  @doc "Report a failed call for a route."
   def report_error(provider_name, model_id, failure_type \\ :other, opts \\ []) do
     GenServer.cast(__MODULE__, {:report_error, provider_name, model_id, failure_type, opts})
   end
@@ -82,6 +215,38 @@ defmodule AgentEx.ModelRouter do
   end
 
   @impl true
+  def handle_call({:auto_select, request, preference, opts}, _from, state) do
+    context_summary = Keyword.get(opts, :context_summary, "")
+    llm_chat = Keyword.get(opts, :llm_chat)
+
+    selector_opts = [context_summary: context_summary, llm_chat: llm_chat]
+
+    result =
+      case Selector.select(request, preference, selector_opts) do
+        {:ok, {model, analysis}} ->
+          route = model_to_route(model)
+
+          AgentEx.Telemetry.event([:model_router, :auto_select], %{}, %{
+            preference: preference,
+            selected_provider: model.provider,
+            selected_model_id: model.id,
+            complexity: analysis.complexity
+          })
+
+          {:ok, route, analysis}
+
+        {:error, reason} ->
+          AgentEx.Telemetry.event([:model_router, :auto_select], %{}, %{
+            preference: preference,
+            error: reason
+          })
+
+          {:error, reason}
+      end
+
+    {:reply, result, state}
+  end
+
   def handle_call({:resolve, tier}, _from, state) do
     routes = routes_for_tier(tier, state)
 
@@ -173,7 +338,7 @@ defmodule AgentEx.ModelRouter do
     {:noreply, state}
   end
 
-  # ----- route resolution via Catalog -----
+  # ----- route resolution via Catalog (manual mode) -----
 
   defp routes_for_tier(tier, state) do
     effective_tier = if tier == :any, do: nil, else: tier
@@ -181,14 +346,12 @@ defmodule AgentEx.ModelRouter do
     catalog_models =
       case effective_tier do
         nil ->
-          AgentEx.LLM.Catalog.find(has: [:chat, :tools])
+          Catalog.find(has: [:chat, :tools])
 
         t ->
-          AgentEx.LLM.Catalog.find(tier: t, has: [:chat, :tools])
+          Catalog.find(tier: t, has: [:chat, :tools])
       end
 
-    # Apply workspace tier overrides — if a tier is overridden to a specific
-    # model id, look it up and use it as the sole route for that tier.
     override_models =
       case effective_tier do
         nil -> []
@@ -203,9 +366,6 @@ defmodule AgentEx.ModelRouter do
       |> Enum.map(&model_to_route/1)
       |> Enum.sort_by(& &1.priority)
 
-    # Prefer healthy routes, but keep unhealthy ones as fallback so
-    # callers always have at least one route to try when everything
-    # is in cooldown (e.g. free-tier rate limits).
     {healthy, unhealthy} = Enum.split_with(routes, &route_healthy?/1)
     healthy ++ unhealthy
   end
@@ -220,7 +380,7 @@ defmodule AgentEx.ModelRouter do
           [provider_str, model_id] ->
             provider = String.to_atom(provider_str)
 
-            case AgentEx.LLM.Catalog.lookup(provider, model_id) do
+            case Catalog.lookup(provider, model_id) do
               nil -> []
               model -> [model]
             end
@@ -231,7 +391,7 @@ defmodule AgentEx.ModelRouter do
     end
   end
 
-  defp model_to_route(%AgentEx.LLM.Model{} = m) do
+  defp model_to_route(%Model{} = m) do
     status = if route_healthy_by_id?(m.id), do: :healthy, else: :unhealthy
 
     %{
@@ -295,4 +455,59 @@ defmodule AgentEx.ModelRouter do
   end
 
   defp now_ms, do: System.monotonic_time(:millisecond)
+
+  # ----- context helpers for auto mode -----
+
+  defp extract_request(ctx) do
+    messages = ctx.messages || []
+
+    messages
+    |> Enum.reverse()
+    |> Enum.find_value("", fn msg ->
+      if msg["role"] == "user" do
+        case msg["content"] do
+          text when is_binary(text) ->
+            text
+
+          blocks when is_list(blocks) ->
+            blocks
+            |> Enum.filter(&(&1["type"] == "text"))
+            |> Enum.map_join(& &1["text"])
+
+          _ ->
+            ""
+        end
+      else
+        nil
+      end
+    end)
+  end
+
+  defp build_context_summary(ctx) do
+    parts = []
+
+    parts =
+      if ctx.metadata[:workspace] do
+        ["Workspace: #{ctx.metadata[:workspace]}" | parts]
+      else
+        parts
+      end
+
+    parts =
+      if ctx.tools != [] do
+        tool_names = Enum.map(ctx.tools, & &1["name"]) |> Enum.join(", ")
+        ["Available tools: #{tool_names}" | parts]
+      else
+        parts
+      end
+
+    parts =
+      if ctx.mode do
+        ["Mode: #{ctx.mode}" | parts]
+      else
+        parts
+      end
+
+    Enum.join(parts, "\n")
+  end
 end

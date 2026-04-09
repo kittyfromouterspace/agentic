@@ -16,8 +16,8 @@ defmodule AgentEx.Telemetry do
   | `[:agent_ex, :session, :resume]` | — | session_id, turns_restored |
   | `[:agent_ex, :pipeline, :stage, :start]` | — | session_id, stage |
   | `[:agent_ex, :pipeline, :stage, :stop]` | duration | session_id, stage |
-  | `[:agent_ex, :llm_call, :start]` | — | session_id, model_tier |
-  | `[:agent_ex, :llm_call, :stop]` | duration, input_tokens, output_tokens, cost_usd | session_id, model_tier, route |
+  | `[:agent_ex, :llm_call, :start]` | — | session_id, model_tier, model_selection_mode |
+  | `[:agent_ex, :llm_call, :stop]` | duration, input_tokens, output_tokens, cost_usd | session_id, model_tier, model_selection_mode, route, provider |
   | `[:agent_ex, :tool, :start]` | — | session_id, tool_name |
   | `[:agent_ex, :tool, :stop]` | duration, output_bytes | session_id, tool_name, success |
   | `[:agent_ex, :context, :compact]` | messages_before, messages_after, pct_before, pct_after | session_id |
@@ -31,6 +31,17 @@ defmodule AgentEx.Telemetry do
   | `[:agent_ex, :circuit_breaker, :trip]` | failure_count | tool_name |
   | `[:agent_ex, :circuit_breaker, :recover]` | — | tool_name |
   | `[:agent_ex, :model_router, :refresh]` | duration, primary_count, lightweight_count | — |
+  | `[:agent_ex, :model_router, :resolve, :start]` | — | session_id, selection_mode |
+  | `[:agent_ex, :model_router, :resolve, :stop]` | duration, route_count | session_id, selection_mode, selected_provider, selected_model_id, complexity, preference, error |
+  | `[:agent_ex, :model_router, :auto_select]` | — | preference, selected_provider, selected_model_id, complexity, error |
+  | `[:agent_ex, :model_router, :auto, :selected]` | — | session_id, complexity, needs_vision, needs_audio, needs_reasoning, needs_large_context, estimated_input_tokens, preference, selected_model, selected_provider |
+  | `[:agent_ex, :model_router, :auto, :fallback]` | — | session_id, reason |
+  | `[:agent_ex, :model_router, :analysis, :start]` | — | method, session_id, request_length |
+  | `[:agent_ex, :model_router, :analysis, :stop]` | duration | method, session_id, complexity, needs_vision, needs_audio, needs_reasoning, needs_large_context, estimated_input_tokens, required_capabilities |
+  | `[:agent_ex, :model_router, :analysis, :fallback]` | — | session_id, from, to, reason |
+  | `[:agent_ex, :model_router, :analysis, :parse_failure]` | — | — |
+  | `[:agent_ex, :model_router, :selection, :start]` | — | session_id, preference, request_length |
+  | `[:agent_ex, :model_router, :selection, :stop]` | duration, candidate_count, best_score | session_id, preference, complexity, selected_provider, selected_model_id, selected_label, needs_vision, needs_reasoning, needs_large_context, top3, error |
   | `[:agent_ex, :memory, :ingest]` | fact_count | workspace_id |
   | `[:agent_ex, :memory, :evict]` | evicted_count, remaining_count | workspace_id |
   | `[:agent_ex, :memory, :retrieval, :stop]` | duration, context_chars, cache_hit | workspace_id, incremental |

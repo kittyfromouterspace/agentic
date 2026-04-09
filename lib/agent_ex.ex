@@ -62,6 +62,8 @@ defmodule AgentEx do
   - `:mode` — execution mode `:agentic | :agentic_planned | :turn_by_turn | :conversational` (optional, overrides `:profile`)
   - `:plan` — pre-built plan map for `:agentic_planned` mode, skips planning phase (optional)
   - `:model_tier` — model tier for LLM calls (optional, default `:primary`)
+  - `:model_selection_mode` — `:manual` or `:auto` (optional, default `:manual`)
+  - `:model_preference` — `:optimize_price` or `:optimize_speed` (optional, default `:optimize_price`, only used in `:auto` mode)
   - `:session_id` — for telemetry and event tracking (optional)
   - `:user_id` — for API key resolution (optional)
   - `:caller` — pid to receive events (optional, defaults to self())
@@ -79,6 +81,8 @@ defmodule AgentEx do
     mode = Keyword.get(opts, :mode, :agentic)
     profile_name = Keyword.get_lazy(opts, :profile, fn -> mode end)
     model_tier = Keyword.get(opts, :model_tier, :primary)
+    model_selection_mode = Keyword.get(opts, :model_selection_mode, :manual)
+    model_preference = Keyword.get(opts, :model_preference, :optimize_price)
     session_id = Keyword.get(opts, :session_id, generate_session_id())
     user_id = Keyword.get(opts, :user_id)
     caller = Keyword.get(opts, :caller, self())
@@ -143,6 +147,8 @@ defmodule AgentEx do
         core_tools: core_tools,
         tools: core_tools,
         model_tier: model_tier,
+        model_selection_mode: model_selection_mode,
+        model_preference: model_preference,
         config: config,
         callbacks: callbacks
       )
@@ -229,6 +235,8 @@ defmodule AgentEx do
         mode = Keyword.get(opts, :mode, :agentic)
         profile_name = Keyword.get_lazy(opts, :profile, fn -> mode end)
         model_tier = Keyword.get(opts, :model_tier, :primary)
+        model_selection_mode = Keyword.get(opts, :model_selection_mode, :manual)
+        model_preference = Keyword.get(opts, :model_preference, :optimize_price)
         user_id = Keyword.get(opts, :user_id)
         caller = Keyword.get(opts, :caller, self())
         workspace_id = Keyword.get(opts, :workspace_id)
@@ -271,6 +279,8 @@ defmodule AgentEx do
             core_tools: core_tools,
             tools: core_tools,
             model_tier: model_tier,
+            model_selection_mode: model_selection_mode,
+            model_preference: model_preference,
             config: config,
             callbacks: callbacks
           )
@@ -323,8 +333,8 @@ defmodule AgentEx do
 
             assistant_msg = %{"role" => "assistant", "content" => content}
 
-            {msgs ++ [assistant_msg], max(turns, event["turn"] || 0), cost + (data["cost"] || 0.0),
-             tokens + input_t + output_t, plan}
+            {msgs ++ [assistant_msg], max(turns, event["turn"] || 0),
+             cost + (data["cost"] || 0.0), tokens + input_t + output_t, plan}
 
           "tool_call" ->
             data = event["data"] || %{}

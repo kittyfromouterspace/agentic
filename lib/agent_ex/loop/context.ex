@@ -23,6 +23,12 @@ defmodule AgentEx.Loop.Context do
     # Model tier resolved from skill requirements (:primary, :lightweight, :any)
     model_tier: :primary,
 
+    # Model selection mode: :manual (tier-based) or :auto (analysis-based)
+    model_selection_mode: :manual,
+
+    # User preference for auto mode: :optimize_price or :optimize_speed
+    model_preference: :optimize_price,
+
     # Protocol (for different agent backends)
     protocol_module: nil,
     protocol_name: :llm,
@@ -128,6 +134,8 @@ defmodule AgentEx.Loop.Context do
           total_cost: float(),
           total_tokens: non_neg_integer(),
           model_tier: atom(),
+          model_selection_mode: :manual | :auto,
+          model_preference: :optimize_price | :optimize_speed,
           activation: map(),
           last_response: map() | nil,
           pending_tool_calls: list(map()),
@@ -158,6 +166,8 @@ defmodule AgentEx.Loop.Context do
       core_tools: Keyword.get(opts, :core_tools, []),
       tools: Keyword.get(opts, :tools, []),
       model_tier: Keyword.get(opts, :model_tier, :primary),
+      model_selection_mode: Keyword.get(opts, :model_selection_mode, :manual),
+      model_preference: Keyword.get(opts, :model_preference, :optimize_price),
       config: Keyword.get(opts, :config, %__MODULE__{}.config),
       callbacks: Keyword.get(opts, :callbacks, %{})
     }

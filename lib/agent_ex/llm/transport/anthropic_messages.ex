@@ -29,6 +29,7 @@ defmodule AgentEx.LLM.Transport.AnthropicMessages do
     cache_enabled = cache_breakpoint_enabled?(Map.get(params, :cache_control))
 
     messages = transform_messages(Map.get(params, :messages, []))
+
     tools =
       params
       |> Map.get(:tools, [])

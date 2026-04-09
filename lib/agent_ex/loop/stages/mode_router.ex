@@ -215,7 +215,9 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
     ctx = %{ctx | messages: ctx.messages ++ [assistant_msg]}
 
     if text != "" do
-      Logger.info("AgentReasoning: #{String.slice(text, 0, 500)} -> tools: #{inspect(tool_names)}")
+      Logger.info(
+        "AgentReasoning: #{String.slice(text, 0, 500)} -> tools: #{inspect(tool_names)}"
+      )
 
       workspace_id = ctx.metadata[:workspace_id]
       Context.emit_event(ctx, {:agent_reasoning, text, tool_names, workspace_id})
@@ -227,7 +229,9 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
     ctx = %{ctx | pending_tool_calls: tool_calls}
 
     if ctx.turns_used >= ctx.config.max_turns do
-      Logger.warning("ModeRouter: max_turns (#{ctx.config.max_turns}) reached for #{ctx.session_id}")
+      Logger.warning(
+        "ModeRouter: max_turns (#{ctx.config.max_turns}) reached for #{ctx.session_id}"
+      )
 
       {:done, Helpers.result_from_context(ctx)}
     else

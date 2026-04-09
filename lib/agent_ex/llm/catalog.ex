@@ -171,7 +171,13 @@ defmodule AgentEx.LLM.Catalog do
         {merged, Map.put(stats, module.id(), stat)}
       end)
 
-    new_state = %{state | models: models, last_refresh: DateTime.utc_now(), provider_stats: provider_stats}
+    new_state = %{
+      state
+      | models: models,
+        last_refresh: DateTime.utc_now(),
+        provider_stats: provider_stats
+    }
+
     save_to_disk(new_state)
     new_state
   end
@@ -201,14 +207,18 @@ defmodule AgentEx.LLM.Catalog do
 
           {:error, reason} ->
             Logger.debug("Catalog: fetch failed for #{module.id()}: #{inspect(reason)}")
-            {module.default_models(), %{status: :fallback, count: length(module.default_models()), source: :static}}
+
+            {module.default_models(),
+             %{status: :fallback, count: length(module.default_models()), source: :static}}
 
           :not_supported ->
-            {module.default_models(), %{status: :static, count: length(module.default_models()), source: :static}}
+            {module.default_models(),
+             %{status: :static, count: length(module.default_models()), source: :static}}
         end
 
       :not_configured ->
-        {module.default_models(), %{status: :no_creds, count: length(module.default_models()), source: :static}}
+        {module.default_models(),
+         %{status: :no_creds, count: length(module.default_models()), source: :static}}
     end
   end
 
@@ -249,7 +259,10 @@ defmodule AgentEx.LLM.Catalog do
             %{models: models, last_refresh: nil, provider_stats: %{}}
 
           {:ok, %{"schema_version" => v}} ->
-            Logger.warning("Catalog: schema version mismatch (#{v} vs #{@schema_version}), forcing refresh")
+            Logger.warning(
+              "Catalog: schema version mismatch (#{v} vs #{@schema_version}), forcing refresh"
+            )
+
             %{models: seed_static_models(), last_refresh: nil, provider_stats: %{}}
 
           _ ->

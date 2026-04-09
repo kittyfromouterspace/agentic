@@ -57,7 +57,8 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
   end
 
   @impl true
-  def fetch_catalog(%Credentials{api_key: api_key} = _creds) when is_binary(api_key) and api_key != "" do
+  def fetch_catalog(%Credentials{api_key: api_key} = _creds)
+      when is_binary(api_key) and api_key != "" do
     headers = [
       {"Authorization", "Bearer #{api_key}"},
       {"content-type", "application/json"}
@@ -67,7 +68,9 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
       embedding_models =
         case fetch_models("#{@default_base_url}/models?output_modalities=embeddings", headers) do
           {:ok, models} ->
-            Enum.map(models, fn m -> %{m | capabilities: MapSet.put(m.capabilities, :embeddings)} end)
+            Enum.map(models, fn m ->
+              %{m | capabilities: MapSet.put(m.capabilities, :embeddings)}
+            end)
 
           {:error, reason} ->
             require Logger
@@ -106,7 +109,8 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
   end
 
   @impl true
-  def fetch_usage(%Credentials{api_key: api_key} = _creds) when is_binary(api_key) and api_key != "" do
+  def fetch_usage(%Credentials{api_key: api_key} = _creds)
+      when is_binary(api_key) and api_key != "" do
     url = "#{@default_base_url}/auth/key"
 
     headers = [

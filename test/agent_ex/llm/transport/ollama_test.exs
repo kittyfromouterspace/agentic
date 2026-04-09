@@ -45,12 +45,19 @@ defmodule AgentEx.LLM.Transport.OllamaTest do
       params = %{
         model: "llama3.2",
         messages: [],
-        tools: [%{"name" => "get_weather", "description" => "Get weather", "input_schema" => %{"type" => "object"}}]
+        tools: [
+          %{
+            "name" => "get_weather",
+            "description" => "Get weather",
+            "input_schema" => %{"type" => "object"}
+          }
+        ]
       }
 
       request = Ollama.build_chat_request(params, base_url: "http://localhost:11434")
 
-      assert [%{"type" => "function", "function" => %{"name" => "get_weather"}}] = request.body[:tools]
+      assert [%{"type" => "function", "function" => %{"name" => "get_weather"}}] =
+               request.body[:tools]
     end
   end
 
@@ -88,7 +95,9 @@ defmodule AgentEx.LLM.Transport.OllamaTest do
 
       assert {:ok, %Response{} = resp} = Ollama.parse_chat_response(200, body, %{})
       assert resp.stop_reason == :tool_use
-      assert [%{type: :tool_use, name: "get_weather", input: %{"location" => "sf"}}] = resp.content
+
+      assert [%{type: :tool_use, name: "get_weather", input: %{"location" => "sf"}}] =
+               resp.content
     end
 
     test "wraps non-200 in an Error with classification" do

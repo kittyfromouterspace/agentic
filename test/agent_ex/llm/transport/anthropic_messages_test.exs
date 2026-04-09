@@ -19,7 +19,11 @@ defmodule AgentEx.LLM.Transport.AnthropicMessagesTest do
         tools: [%{"name" => "get_weather", "description" => "Get weather", "input_schema" => %{}}]
       }
 
-      request = AnthropicMessages.build_chat_request(params, base_url: "https://api.anthropic.com/v1", api_key: "sk-test")
+      request =
+        AnthropicMessages.build_chat_request(params,
+          base_url: "https://api.anthropic.com/v1",
+          api_key: "sk-test"
+        )
 
       # System stays as a plain string
       assert request.body[:system] == "You are helpful."
@@ -39,7 +43,11 @@ defmodule AgentEx.LLM.Transport.AnthropicMessagesTest do
         cache_control: %{stable_hash: "abc", prefix_changed: true}
       }
 
-      request = AnthropicMessages.build_chat_request(params, base_url: "https://api.anthropic.com/v1", api_key: "sk-test")
+      request =
+        AnthropicMessages.build_chat_request(params,
+          base_url: "https://api.anthropic.com/v1",
+          api_key: "sk-test"
+        )
 
       assert request.body[:system] == "You are helpful."
       [tool] = request.body[:tools]
@@ -54,7 +62,11 @@ defmodule AgentEx.LLM.Transport.AnthropicMessagesTest do
         cache_control: %{stable_hash: "abc", prefix_changed: false}
       }
 
-      request = AnthropicMessages.build_chat_request(params, base_url: "https://api.anthropic.com/v1", api_key: "sk-test")
+      request =
+        AnthropicMessages.build_chat_request(params,
+          base_url: "https://api.anthropic.com/v1",
+          api_key: "sk-test"
+        )
 
       assert [
                %{
@@ -76,7 +88,11 @@ defmodule AgentEx.LLM.Transport.AnthropicMessagesTest do
         cache_control: %{stable_hash: "abc", prefix_changed: false}
       }
 
-      request = AnthropicMessages.build_chat_request(params, base_url: "https://api.anthropic.com/v1", api_key: "sk-test")
+      request =
+        AnthropicMessages.build_chat_request(params,
+          base_url: "https://api.anthropic.com/v1",
+          api_key: "sk-test"
+        )
 
       [first, last] = request.body[:tools]
       refute Map.has_key?(first, "cache_control")
@@ -91,7 +107,11 @@ defmodule AgentEx.LLM.Transport.AnthropicMessagesTest do
         cache_control: %{"stable_hash" => "abc", "prefix_changed" => false}
       }
 
-      request = AnthropicMessages.build_chat_request(params, base_url: "https://api.anthropic.com/v1", api_key: "sk-test")
+      request =
+        AnthropicMessages.build_chat_request(params,
+          base_url: "https://api.anthropic.com/v1",
+          api_key: "sk-test"
+        )
 
       assert [%{"cache_control" => %{"type" => "ephemeral"}}] = request.body[:system]
     end
@@ -103,7 +123,11 @@ defmodule AgentEx.LLM.Transport.AnthropicMessagesTest do
         cache_control: %{stable_hash: "abc", prefix_changed: false}
       }
 
-      request = AnthropicMessages.build_chat_request(params, base_url: "https://api.anthropic.com/v1", api_key: "sk-test")
+      request =
+        AnthropicMessages.build_chat_request(params,
+          base_url: "https://api.anthropic.com/v1",
+          api_key: "sk-test"
+        )
 
       refute Map.has_key?(request.body, :system)
     end
@@ -123,7 +147,9 @@ defmodule AgentEx.LLM.Transport.AnthropicMessagesTest do
         }
       }
 
-      assert {:ok, %Response{usage: usage}} = AnthropicMessages.parse_chat_response(200, body, %{})
+      assert {:ok, %Response{usage: usage}} =
+               AnthropicMessages.parse_chat_response(200, body, %{})
+
       assert usage.input_tokens == 100
       assert usage.output_tokens == 20
       assert usage.cache_write == 1000
@@ -138,7 +164,9 @@ defmodule AgentEx.LLM.Transport.AnthropicMessagesTest do
         "usage" => %{"input_tokens" => 100, "output_tokens" => 20}
       }
 
-      assert {:ok, %Response{usage: usage}} = AnthropicMessages.parse_chat_response(200, body, %{})
+      assert {:ok, %Response{usage: usage}} =
+               AnthropicMessages.parse_chat_response(200, body, %{})
+
       assert usage.cache_read == 0
       assert usage.cache_write == 0
     end

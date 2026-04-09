@@ -79,7 +79,11 @@ defmodule AgentEx.LLM.Provider do
 
         request = transport_mod.build_chat_request(canonical, transport_opts)
 
-        case Req.post(request.url, json: request.body, headers: request.headers, receive_timeout: 120_000) do
+        case Req.post(request.url,
+               json: request.body,
+               headers: request.headers,
+               receive_timeout: 120_000
+             ) do
           {:ok, %{status: status, body: resp_body, headers: resp_headers}} ->
             transport_mod.parse_chat_response(status, resp_body, resp_headers)
 
@@ -96,7 +100,8 @@ defmodule AgentEx.LLM.Provider do
       :not_configured ->
         {:error,
          %AgentEx.LLM.Error{
-           message: "#{provider.id()} not configured (set #{Enum.join(provider.env_vars(), " or ")})",
+           message:
+             "#{provider.id()} not configured (set #{Enum.join(provider.env_vars(), " or ")})",
            status: nil,
            classification: :auth
          }}

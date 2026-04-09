@@ -235,7 +235,10 @@ defmodule AgentEx.LLM.Transport.OpenAIChatCompletions do
   defp transform_tool_choice(:none), do: "none"
   defp transform_tool_choice(:any), do: "required"
   defp transform_tool_choice(:required), do: "required"
-  defp transform_tool_choice(%{name: name}), do: %{"type" => "function", "function" => %{"name" => name}}
+
+  defp transform_tool_choice(%{name: name}),
+    do: %{"type" => "function", "function" => %{"name" => name}}
+
   defp transform_tool_choice(other), do: other
 
   defp maybe_put(map, _key, nil), do: map

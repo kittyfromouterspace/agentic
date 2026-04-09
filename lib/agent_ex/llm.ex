@@ -48,10 +48,15 @@ defmodule AgentEx.LLM do
     case Catalog.find(tier: tier, has: :chat) do
       [%{provider: provider_id, id: model_id} | _] ->
         provider = ProviderRegistry.get(provider_id)
-        chat(params, Keyword.merge(opts, provider: provider_id, model: model_id, _provider_module: provider))
+
+        chat(
+          params,
+          Keyword.merge(opts, provider: provider_id, model: model_id, _provider_module: provider)
+        )
 
       [] ->
-        {:error, %Error{message: "no provider available for tier #{tier}", classification: :permanent}}
+        {:error,
+         %Error{message: "no provider available for tier #{tier}", classification: :permanent}}
     end
   end
 
@@ -70,7 +75,8 @@ defmodule AgentEx.LLM do
 
     case lookup_provider(provider_id) do
       nil ->
-        {:error, %Error{message: "unknown provider #{inspect(provider_id)}", classification: :permanent}}
+        {:error,
+         %Error{message: "unknown provider #{inspect(provider_id)}", classification: :permanent}}
 
       provider ->
         embed_via_provider(provider, model_id, text_or_list)

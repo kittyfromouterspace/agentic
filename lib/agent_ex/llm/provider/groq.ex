@@ -60,7 +60,8 @@ defmodule AgentEx.LLM.Provider.Groq do
   end
 
   @impl true
-  def fetch_catalog(%Credentials{api_key: api_key} = _creds) when is_binary(api_key) and api_key != "" do
+  def fetch_catalog(%Credentials{api_key: api_key} = _creds)
+      when is_binary(api_key) and api_key != "" do
     url = "#{default_base_url()}/models"
 
     headers = [
@@ -137,7 +138,9 @@ defmodule AgentEx.LLM.Provider.Groq do
     }
   end
 
-  defp stringify_body(%{"error" => %{"message" => msg}}) when is_binary(msg), do: String.downcase(msg)
+  defp stringify_body(%{"error" => %{"message" => msg}}) when is_binary(msg),
+    do: String.downcase(msg)
+
   defp stringify_body(body) when is_binary(body), do: String.downcase(body)
   defp stringify_body(other), do: String.downcase(inspect(other, limit: 200))
 end

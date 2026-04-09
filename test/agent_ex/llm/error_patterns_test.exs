@@ -95,7 +95,8 @@ defmodule AgentEx.LLM.ErrorPatternsTest do
     end
 
     test "matches not allowed for this organization" do
-      assert ErrorPatterns.classify_message("not allowed for this organization") == :auth_permanent
+      assert ErrorPatterns.classify_message("not allowed for this organization") ==
+               :auth_permanent
     end
   end
 
@@ -174,11 +175,13 @@ defmodule AgentEx.LLM.ErrorPatternsTest do
     end
 
     test "matches input is too long for this model" do
-      assert ErrorPatterns.classify_message("input is too long for this model") == :context_overflow
+      assert ErrorPatterns.classify_message("input is too long for this model") ==
+               :context_overflow
     end
 
     test "matches ollama context length exceeded" do
-      assert ErrorPatterns.classify_message("ollama error: context length exceeded") == :context_overflow
+      assert ErrorPatterns.classify_message("ollama error: context length exceeded") ==
+               :context_overflow
     end
 
     test "matches generic heuristic — tokens + exceeds" do

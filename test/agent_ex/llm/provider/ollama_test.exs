@@ -35,7 +35,13 @@ defmodule AgentEx.LLM.Provider.OllamaTest do
       models = Ollama.default_models()
       assert length(models) >= 2
 
-      chat = Enum.find(models, &(MapSet.member?(&1.capabilities, :chat) && !MapSet.member?(&1.capabilities, :embeddings)))
+      chat =
+        Enum.find(
+          models,
+          &(MapSet.member?(&1.capabilities, :chat) &&
+              !MapSet.member?(&1.capabilities, :embeddings))
+        )
+
       embed = Enum.find(models, &MapSet.member?(&1.capabilities, :embeddings))
 
       assert %Model{provider: :ollama} = chat
@@ -60,7 +66,9 @@ defmodule AgentEx.LLM.Provider.OllamaTest do
       try do
         assert Ollama.fetch_catalog(%AgentEx.LLM.Credentials{}) == :not_supported
       after
-        if original, do: System.put_env("OLLAMA_HOST", original), else: System.delete_env("OLLAMA_HOST")
+        if original,
+          do: System.put_env("OLLAMA_HOST", original),
+          else: System.delete_env("OLLAMA_HOST")
       end
     end
   end

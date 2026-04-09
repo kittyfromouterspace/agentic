@@ -197,11 +197,17 @@ defmodule AgentEx.ModelRouter do
 
     all_models = override_models ++ catalog_models
 
-    all_models
-    |> Enum.uniq_by(fn m -> {m.provider, m.id} end)
-    |> Enum.map(&model_to_route/1)
-    |> Enum.filter(&route_healthy?/1)
-    |> Enum.sort_by(& &1.priority)
+    routes =
+      all_models
+      |> Enum.uniq_by(fn m -> {m.provider, m.id} end)
+      |> Enum.map(&model_to_route/1)
+      |> Enum.sort_by(& &1.priority)
+
+    # Prefer healthy routes, but keep unhealthy ones as fallback so
+    # callers always have at least one route to try when everything
+    # is in cooldown (e.g. free-tier rate limits).
+    {healthy, unhealthy} = Enum.split_with(routes, &route_healthy?/1)
+    healthy ++ unhealthy
   end
 
   defp resolve_override(tier, overrides) do

@@ -11,9 +11,19 @@ defmodule AgentEx.Loop.Profile do
   - `:agentic_planned` -- Two-phase: plan then execute with tracking and verification
   - `:turn_by_turn` -- LLM proposes chunks, human approves/edits before execution
   - `:conversational` -- Simple call-respond loop, no tool execution
+
+  ## Protocol Support
+
+  Each profile can declare a protocol to use for agent communication:
+
+  - `:llm` (default) -- Uses LLM API calls via `llm_chat` callback
+  - `:claude_code` -- Uses Claude Code CLI via local agent protocol
+  - `:opencode` -- Uses OpenCode CLI via local agent protocol
   """
 
   alias AgentEx.Loop.Stages
+
+  @type protocol_name :: :llm | :claude_code | :opencode | atom()
 
   @doc "Returns the stage list for the given profile."
   def stages(:agentic) do
@@ -65,6 +75,23 @@ defmodule AgentEx.Loop.Profile do
     ]
   end
 
+  # CLI-based profiles (local agent protocols)
+  def stages(:claude_code) do
+    [
+      Stages.ContextGuard,
+      Stages.ProgressInjector,
+      Stages.CLIExecutor,
+      Stages.ModeRouter,
+      Stages.TranscriptRecorder,
+      Stages.ToolExecutor,
+      Stages.CommitmentGate
+    ]
+  end
+
+  def stages(:opencode) do
+    stages(:claude_code)
+  end
+
   def stages(_), do: stages(:agentic)
 
   @doc "Returns the default config for the given profile."
@@ -75,7 +102,9 @@ defmodule AgentEx.Loop.Profile do
       plan_required: false,
       verify_on_complete: false,
       progress_injection: :system_reminder,
-      telemetry_prefix: [:agent_ex]
+      telemetry_prefix: [:agent_ex],
+      protocol: :llm,
+      transport_type: :llm
     }
   end
 
@@ -86,7 +115,9 @@ defmodule AgentEx.Loop.Profile do
       progress_injection: :system_reminder,
       require_plan_verification: true,
       max_plan_steps: 20,
-      telemetry_prefix: [:agent_ex]
+      telemetry_prefix: [:agent_ex],
+      protocol: :llm,
+      transport_type: :llm
     }
   end
 
@@ -96,7 +127,9 @@ defmodule AgentEx.Loop.Profile do
       compaction_at_pct: 0.80,
       progress_injection: :none,
       max_chunks_per_session: 50,
-      telemetry_prefix: [:agent_ex]
+      telemetry_prefix: [:agent_ex],
+      protocol: :llm,
+      transport_type: :llm
     }
   end
 
@@ -107,7 +140,83 @@ defmodule AgentEx.Loop.Profile do
       plan_required: false,
       verify_on_complete: false,
       progress_injection: :none,
-      telemetry_prefix: [:agent_ex]
+      telemetry_prefix: [:agent_ex],
+      protocol: :llm,
+      transport_type: :llm
+    }
+  end
+
+  # CLI-based profiles
+  def config(:claude_code) do
+    %{
+      max_turns: 50,
+      compaction_at_pct: 0.80,
+      plan_required: false,
+      verify_on_complete: false,
+      progress_injection: :system_reminder,
+      telemetry_prefix: [:agent_ex],
+      protocol: :claude_code,
+      transport_type: :local_agent,
+      cli_config: %{
+        command: "claude",
+        args: [
+          "-p",
+          "--output-format",
+          "stream-json",
+          "--include-partial-messages",
+          "--verbose",
+          "--permission-mode",
+          "bypassPermissions"
+        ],
+        session_mode: :always,
+        session_id_fields: ["session_id"]
+      },
+      # Usage limits for subscription agents
+      session_cost_limit_usd: 5.0,
+      # 10 minutes
+      session_duration_limit_ms: 600_000
+    }
+  end
+
+  def config(:opencode) do
+    %{
+      max_turns: 50,
+      compaction_at_pct: 0.80,
+      plan_required: false,
+      verify_on_complete: false,
+      progress_injection: :system_reminder,
+      telemetry_prefix: [:agent_ex],
+      protocol: :opencode,
+      transport_type: :local_agent,
+      cli_config: %{
+        command: "opencode",
+        args: ["--mode", "agent"],
+        session_mode: :always,
+        session_id_fields: ["session_id"]
+      },
+      session_cost_limit_usd: 5.0,
+      session_duration_limit_ms: 600_000
+    }
+  end
+
+  def config(:codex) do
+    %{
+      max_turns: 50,
+      compaction_at_pct: 0.80,
+      plan_required: false,
+      verify_on_complete: false,
+      progress_injection: :system_reminder,
+      telemetry_prefix: [:agent_ex],
+      protocol: :codex,
+      transport_type: :local_agent,
+      cli_config: %{
+        command: "codex",
+        args: ["--json"],
+        session_mode: :always,
+        session_id_fields: ["session_id"]
+      },
+      session_cost_limit_usd: 10.0,
+      session_duration_limit_ms: 600_000
     }
   end
 

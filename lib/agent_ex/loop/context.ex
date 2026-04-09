@@ -6,6 +6,8 @@ defmodule AgentEx.Loop.Context do
   resolved model, progress tracking, callbacks, and configuration.
   """
 
+  alias AgentEx.Protocol
+
   defstruct [
     # Identity (default nil)
     session_id: nil,
@@ -20,6 +22,13 @@ defmodule AgentEx.Loop.Context do
 
     # Model tier resolved from skill requirements (:primary, :lightweight, :any)
     model_tier: :primary,
+
+    # Protocol (for different agent backends)
+    protocol_module: nil,
+    protocol_name: :llm,
+    protocol_session_id: nil,
+    transport_type: :llm,
+    backend_config: %{},
 
     # Conversation
     messages: [],
@@ -126,7 +135,13 @@ defmodule AgentEx.Loop.Context do
           summary_nudge_sent: boolean(),
           commitment_continuations: non_neg_integer(),
           config: map(),
-          callbacks: map()
+          callbacks: map(),
+          # Protocol fields
+          protocol_module: module() | nil,
+          protocol_name: atom(),
+          protocol_session_id: String.t() | nil,
+          transport_type: Protocol.transport_type(),
+          backend_config: map()
         }
 
   @doc "Create a new context from keyword opts."

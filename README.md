@@ -29,6 +29,57 @@ def deps do
 end
 ```
 
+### Database Backend
+
+AgentEx uses Mneme for knowledge persistence. Mneme supports two database backends:
+
+**Option A: libSQL (Recommended for new projects)**
+Single-file SQLite with native vector support. Zero configuration.
+
+```elixir
+def deps do
+  [
+    {:agent_ex, "~> 0.1.0"},
+    {:ecto_libsql, "~> 0.9"}
+  ]
+end
+```
+
+Configure Mneme:
+```elixir
+config :mneme,
+  database_adapter: Mneme.DatabaseAdapter.LibSQL,
+  repo: MyApp.Repo,
+  embedding: [
+    provider: Mneme.Embedding.OpenRouter,
+    dimensions: 768
+  ]
+```
+
+**Option B: PostgreSQL (For existing installations)**
+Traditional server-based database with pgvector extension.
+
+```elixir
+def deps do
+  [
+    {:agent_ex, "~> 0.1.0"},
+    {:postgrex, "~> 0.19"},
+    {:pgvector, "~> 0.3"}
+  ]
+end
+```
+
+Configure Mneme:
+```elixir
+config :mneme,
+  database_adapter: Mneme.DatabaseAdapter.Postgres,
+  repo: MyApp.Repo,
+  embedding: [
+    provider: Mneme.Embedding.OpenRouter,
+    dimensions: 1536
+  ]
+```
+
 ## Quick Start
 
 ```elixir

@@ -65,3 +65,7 @@ Run a single test by line:
 ```bash
 mix test test/agent_ex/loop/engine_test.exs:42
 ```
+
+## Versioning
+
+This library is consumed as a git dependency by Worth. When adding new functionality or making breaking changes, you **must** create a new git tag (e.g., `v0.3.0`) so that Worth's `mix.exs` can pin to a specific version. Follow semantic versioning.

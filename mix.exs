@@ -36,10 +36,12 @@ defmodule AgentEx.MixProject do
       {:yaml_elixir, "~> 2.9"},
       {:req, "~> 0.5"},
       {:nimble_options, "~> 1.1"},
-      # {:mneme, github: "kittyfromouterspace/mneme", only: :prod, override: true},
+      # Mneme memory engine - now supports both PostgreSQL and libSQL
       {:mneme, path: "../mneme"},
       {:ecto_sql, "~> 3.12"},
-      {:postgrex, "~> 0.19"},
+      # Database drivers (optional - pick one based on your backend)
+      {:postgrex, "~> 0.19", optional: true},
+      {:ecto_libsql, "~> 0.9", optional: true},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:ex_check, "~> 0.16", only: [:dev], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

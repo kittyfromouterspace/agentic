@@ -122,6 +122,45 @@ defmodule AgentEx.ModelRouter.Selector do
   end
 
   @doc """
+  Like `select/3` but returns all ranked models (not just the best),
+  so the caller can walk the full list on failure.
+  """
+  def select_all(request, preference, opts \\ []) do
+    context_summary = Keyword.get(opts, :context_summary, "")
+    session_id = Keyword.get(opts, :session_id)
+    llm_chat = Keyword.get(opts, :llm_chat)
+    model_filter = Keyword.get(opts, :model_filter)
+
+    case Analyzer.analyze(request,
+           context_summary: context_summary,
+           llm_chat: llm_chat,
+           session_id: session_id
+         ) do
+      {:ok, analysis} ->
+        models = fetch_candidates(analysis, model_filter)
+
+        ranked =
+          models
+          |> Enum.map(fn model -> {model, Preference.score(model, preference, analysis)} end)
+          |> Enum.sort_by(fn {_model, score} -> score end)
+
+        case ranked do
+          [{best, _} | _] ->
+            Logger.debug(
+              "ModelRouter.Selector: selected #{best.provider}/#{best.id} " <>
+                "(complexity: #{analysis.complexity}, preference: #{preference}, " <>
+                "#{length(ranked)} candidates)"
+            )
+
+            {:ok, {Enum.map(ranked, fn {model, _score} -> model end), analysis}}
+
+          [] ->
+            {:error, :no_models_available}
+        end
+    end
+  end
+
+  @doc """
   Rank all candidate models for a given analysis and preference.
 
   Returns a list of `{model, score}` tuples sorted by score ascending.

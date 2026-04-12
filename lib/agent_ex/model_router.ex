@@ -98,29 +98,30 @@ defmodule AgentEx.ModelRouter do
             model_filter: model_filter
           ]
 
-          case Selector.select(request, preference, opts) do
-            {:ok, {model, analysis}} ->
-              route = model_to_route(model)
+          case Selector.select_all(request, preference, opts) do
+            {:ok, {models, analysis}} ->
+              routes = Enum.map(models, &model_to_route/1)
+              best = List.first(models)
 
               AgentEx.Telemetry.event(
                 [:model_router, :resolve, :stop],
                 %{
                   duration: System.monotonic_time() - start_time,
-                  route_count: 1
+                  route_count: length(routes)
                 },
                 %{
                   session_id: session_id,
                   selection_mode: :auto,
                   preference: preference,
-                  selected_provider: model.provider,
-                  selected_model_id: model.id,
+                  selected_provider: best && best.provider,
+                  selected_model_id: best && best.id,
                   complexity: analysis.complexity,
                   needs_vision: analysis.needs_vision,
                   needs_reasoning: analysis.needs_reasoning
                 }
               )
 
-              {:ok, [route], analysis}
+              {:ok, routes, analysis}
 
             {:error, reason} ->
               AgentEx.Telemetry.event(

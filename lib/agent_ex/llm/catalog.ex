@@ -363,7 +363,7 @@ defmodule AgentEx.LLM.Catalog do
 
   defp decode_models(_), do: %{}
 
-  defp to_atom_if_possible(s) when is_binary(s), do: String.to_existing_atom(s)
+  defp to_atom_if_possible(s) when is_binary(s), do: String.to_atom(s)
   defp to_atom_if_possible(a) when is_atom(a), do: a
 
   # ----- filter helpers -----

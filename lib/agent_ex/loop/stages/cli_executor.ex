@@ -183,7 +183,8 @@ defmodule AgentEx.Loop.Stages.CLIExecutor do
         pending_tool_calls: tool_calls,
         accumulated_text: ctx.accumulated_text <> content,
         total_cost: ctx.total_cost + cost,
-        total_tokens: ctx.total_tokens + (usage[:input_tokens] || 0) + (usage[:output_tokens] || 0)
+        total_tokens:
+          ctx.total_tokens + (usage[:input_tokens] || 0) + (usage[:output_tokens] || 0)
     }
   end
 

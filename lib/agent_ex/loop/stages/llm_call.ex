@@ -196,7 +196,9 @@ defmodule AgentEx.Loop.Stages.LLMCall do
         do_try_routes(routes, :auto, base_params, llm_chat, ctx, nil)
 
       {:error, reason} ->
-        Logger.warning("LLMCall: auto route resolution failed (#{inspect(reason)}), falling back to tier-based")
+        Logger.warning(
+          "LLMCall: auto route resolution failed (#{inspect(reason)}), falling back to tier-based"
+        )
 
         AgentEx.Telemetry.event([:model_router, :auto, :fallback], %{}, %{
           session_id: ctx.session_id,
@@ -207,7 +209,9 @@ defmodule AgentEx.Loop.Stages.LLMCall do
     end
   rescue
     e ->
-      Logger.warning("LLMCall: auto route resolution crashed: #{Exception.message(e)}, falling back to tier-based")
+      Logger.warning(
+        "LLMCall: auto route resolution crashed: #{Exception.message(e)}, falling back to tier-based"
+      )
 
       AgentEx.Telemetry.event([:model_router, :auto, :fallback], %{}, %{
         session_id: ctx.session_id,
@@ -240,7 +244,9 @@ defmodule AgentEx.Loop.Stages.LLMCall do
   end
 
   defp do_try_routes([route | rest], tier, base_params, llm_chat, ctx, _last) do
-    Logger.debug("LLMCall: trying route #{route.provider_name}/#{route.model_id} (source: #{route.source})")
+    Logger.debug(
+      "LLMCall: trying route #{route.provider_name}/#{route.model_id} (source: #{route.source})"
+    )
 
     Context.emit_event(
       ctx,
@@ -282,7 +288,9 @@ defmodule AgentEx.Loop.Stages.LLMCall do
         routes
 
       other ->
-        Logger.warning("LLMCall: resolve_all returned #{inspect(other)}, proceeding without routes")
+        Logger.warning(
+          "LLMCall: resolve_all returned #{inspect(other)}, proceeding without routes"
+        )
 
         []
     end

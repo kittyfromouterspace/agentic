@@ -157,7 +157,8 @@ defmodule AgentEx.Loop.Stages.ToolExecutor do
       {:error, :circuit_open} ->
         Logger.warning("CircuitBreaker: #{name} is open, skipping execution")
 
-        {"Tool temporarily unavailable (repeated failures). Try a different approach or wait a few minutes.", true, ctx}
+        {"Tool temporarily unavailable (repeated failures). Try a different approach or wait a few minutes.",
+         true, ctx}
 
       :ok ->
         try do

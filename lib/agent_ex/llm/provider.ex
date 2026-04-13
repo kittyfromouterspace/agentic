@@ -143,7 +143,8 @@ defmodule AgentEx.LLM.Provider do
         acc = %{text: "", tool_calls: [], model_id: nil, usage: nil, finish_reason: nil}
 
         stream_fun = fn {:data, data}, {req, resp} ->
-          current_acc = if is_map(resp.body) and is_map_key(resp.body, :text), do: resp.body, else: acc
+          current_acc =
+            if is_map(resp.body) and is_map_key(resp.body, :text), do: resp.body, else: acc
 
           updated_acc =
             data

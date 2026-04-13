@@ -32,7 +32,9 @@ defmodule AgentEx.ModelRouter.AnalyzerTest do
 
     test "classifies refactor requests as :complex" do
       {:ok, analysis} =
-        Analyzer.analyze_heuristic("Refactor the entire authentication module to use JWT tokens instead of sessions")
+        Analyzer.analyze_heuristic(
+          "Refactor the entire authentication module to use JWT tokens instead of sessions"
+        )
 
       assert analysis.complexity == :complex
     end
@@ -53,7 +55,9 @@ defmodule AgentEx.ModelRouter.AnalyzerTest do
 
     test "classifies moderate-length requests as :moderate" do
       {:ok, analysis} =
-        Analyzer.analyze_heuristic("Can you help me write a function that validates email addresses in Elixir?")
+        Analyzer.analyze_heuristic(
+          "Can you help me write a function that validates email addresses in Elixir?"
+        )
 
       assert analysis.complexity == :moderate
     end
@@ -121,7 +125,9 @@ defmodule AgentEx.ModelRouter.AnalyzerTest do
       {:ok, a1} = Analyzer.analyze_heuristic("hi")
 
       {:ok, _a2} =
-        Analyzer.analyze_heuristic("refactor the codebase architecture to use microservices and deploy to kubernetes")
+        Analyzer.analyze_heuristic(
+          "refactor the codebase architecture to use microservices and deploy to kubernetes"
+        )
 
       assert a1.complexity == :simple
     end

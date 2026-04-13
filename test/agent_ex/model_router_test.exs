@@ -12,7 +12,9 @@ defmodule AgentEx.ModelRouterTest do
           model_tier: :primary,
           model_selection_mode: :manual,
           callbacks: %{
-            llm_chat: fn _ -> {:ok, %AgentEx.LLM.Response{content: [], stop_reason: :end_turn}} end
+            llm_chat: fn _ ->
+              {:ok, %AgentEx.LLM.Response{content: [], stop_reason: :end_turn}}
+            end
           }
         )
 

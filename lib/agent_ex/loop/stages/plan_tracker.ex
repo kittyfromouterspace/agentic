@@ -33,7 +33,9 @@ defmodule AgentEx.Loop.Stages.PlanTracker do
     ctx = track_step_progress(ctx)
 
     if all_steps_complete?(ctx) do
-      Logger.info("PlanTracker: all steps complete for #{ctx.session_id}, transitioning to :verify")
+      Logger.info(
+        "PlanTracker: all steps complete for #{ctx.session_id}, transitioning to :verify"
+      )
 
       steps = ctx.plan[:steps] || []
 

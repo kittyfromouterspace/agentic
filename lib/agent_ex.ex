@@ -85,6 +85,7 @@ defmodule AgentEx do
     model_selection_mode = Keyword.get(opts, :model_selection_mode, :manual)
     model_preference = Keyword.get(opts, :model_preference, :optimize_price)
     model_filter = Keyword.get(opts, :model_filter)
+    strategy = Keyword.get(opts, :strategy, :default)
     session_id = Keyword.get(opts, :session_id, generate_session_id())
     user_id = Keyword.get(opts, :user_id)
     caller = Keyword.get(opts, :caller, self())
@@ -152,6 +153,7 @@ defmodule AgentEx do
         model_selection_mode: model_selection_mode,
         model_preference: model_preference,
         model_filter: model_filter,
+        strategy: strategy,
         config: config,
         callbacks: callbacks
       )
@@ -174,7 +176,8 @@ defmodule AgentEx do
     Telemetry.event([:session, :start], %{}, %{
       session_id: session_id,
       mode: mode,
-      profile: profile_name
+      profile: profile_name,
+      strategy: strategy
     })
 
     session_start = System.monotonic_time()
@@ -187,13 +190,15 @@ defmodule AgentEx do
       {:ok, res} ->
         Telemetry.event([:session, :stop], Map.put(res, :duration, session_duration), %{
           session_id: session_id,
-          mode: mode
+          mode: mode,
+          strategy: strategy
         })
 
       {:error, reason} ->
         Telemetry.event([:session, :error], %{duration: session_duration}, %{
           session_id: session_id,
           mode: mode,
+          strategy: strategy,
           error: inspect(reason)
         })
     end

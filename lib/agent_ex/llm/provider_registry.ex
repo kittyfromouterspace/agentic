@@ -77,7 +77,7 @@ defmodule AgentEx.LLM.ProviderRegistry do
 
     for module <- AgentEx.Config.providers() do
       id = module.id()
-      status = if MapSet.member?(disabled_ids, id), do: :disabled, else: :enabled
+      status = if id in disabled_ids, do: :disabled, else: :enabled
       :ets.insert(@table, {id, module, status})
 
       Logger.debug("AgentEx.LLM.ProviderRegistry: #{id} -> #{module} (#{status})")
@@ -91,7 +91,7 @@ defmodule AgentEx.LLM.ProviderRegistry do
     case :ets.lookup(@table, provider_id) do
       [{_, module, _}] ->
         :ets.insert(@table, {provider_id, module, :enabled})
-        new_disabled = MapSet.delete(state.disabled_ids, provider_id)
+        new_disabled = List.delete(state.disabled_ids, provider_id)
         persist_disabled(new_disabled)
         {:reply, :ok, %{state | disabled_ids: new_disabled}}
 
@@ -104,7 +104,7 @@ defmodule AgentEx.LLM.ProviderRegistry do
     case :ets.lookup(@table, provider_id) do
       [{_, module, _}] ->
         :ets.insert(@table, {provider_id, module, :disabled})
-        new_disabled = MapSet.put(state.disabled_ids, provider_id)
+        new_disabled = [provider_id | List.delete(state.disabled_ids, provider_id)]
         persist_disabled(new_disabled)
         {:reply, :ok, %{state | disabled_ids: new_disabled}}
 
@@ -121,17 +121,15 @@ defmodule AgentEx.LLM.ProviderRegistry do
 
   defp load_disabled_set do
     case Application.get_env(:agent_ex, :disabled_providers) do
-      nil -> MapSet.new()
-      list when is_list(list) -> MapSet.new(list)
-      _ -> MapSet.new()
+      list when is_list(list) -> list
+      _ -> []
     end
   end
 
   defp persist_disabled(disabled_ids) do
-    list = MapSet.to_list(disabled_ids)
-    Application.put_env(:agent_ex, :disabled_providers, list)
+    Application.put_env(:agent_ex, :disabled_providers, disabled_ids)
 
-    persist_to_host(list)
+    persist_to_host(disabled_ids)
   end
 
   defp persist_to_host(list) do

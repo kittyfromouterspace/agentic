@@ -151,12 +151,10 @@ defmodule AgentEx.Loop.Stages.LLMCall do
           (cost[:cache_read] || cost["cache_read"] || 0.0) * cache_read_per +
           (cost[:cache_write] || cost["cache_write"] || 0.0) * cache_write_per
 
-      _ ->
+      nil ->
         0.0
     end
   end
-
-  defp compute_cost(_, _), do: 0.0
 
   defp route_model(%{provider_name: name, model_id: id}) when is_binary(name) and is_binary(id) do
     AgentEx.LLM.Catalog.lookup(safe_atom(name), id)

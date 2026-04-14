@@ -29,6 +29,9 @@ defmodule AgentEx.ModelRouter.Preference do
   @spec default() :: preference()
   def default, do: :optimize_price
 
+  alias AgentEx.LLM.Model
+  alias AgentEx.ModelRouter.Analyzer
+
   @doc """
   Compute a score for a model given a preference and analysis.
 

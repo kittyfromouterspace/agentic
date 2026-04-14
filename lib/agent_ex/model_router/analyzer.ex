@@ -60,9 +60,7 @@ defmodule AgentEx.ModelRouter.Analyzer do
       {:ok, analysis} ->
         AgentEx.Telemetry.event(
           [:model_router, :analysis, :stop],
-          %{
-            duration: duration
-          },
+          %{duration: duration},
           %{
             method: method,
             session_id: session_id,
@@ -76,11 +74,19 @@ defmodule AgentEx.ModelRouter.Analyzer do
           }
         )
 
-      _ ->
-        :ok
-    end
+        {:ok, analysis}
 
-    result
+      {:error, reason} ->
+        Logger.warning("ModelRouter.Analyzer: analysis failed: #{inspect(reason)}")
+
+        AgentEx.Telemetry.event(
+          [:model_router, :analysis, :stop],
+          %{duration: duration},
+          %{method: method, session_id: session_id, error: inspect(reason)}
+        )
+
+        {:error, reason}
+    end
   end
 
   defp analyze_via_llm(request, context_summary, llm_chat, session_id) do

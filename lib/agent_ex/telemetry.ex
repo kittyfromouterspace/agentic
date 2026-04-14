@@ -49,6 +49,8 @@ defmodule AgentEx.Telemetry do
   | `[:agent_ex, :subagent, :spawn]` | — | session_id, parent_session_id, depth |
   | `[:agent_ex, :subagent, :complete]` | duration, cost, steps | session_id, parent_session_id |
   | `[:agent_ex, :subagent, :error]` | duration | session_id, parent_session_id, error |
+  | `[:agent_ex, :orchestration, :turn]` | — | session_id, strategy, mode, phase, stop_reason |
+  | `[:agent_ex, :orchestration, :tool_executed]` | duration, output_bytes | session_id, strategy, mode, tool_name, success |
   """
 
   @doc """

@@ -109,7 +109,7 @@ defmodule AgentEx.LLM.Provider.Groq do
   defp parse_model(raw) do
     id = raw["id"]
 
-    capabilities = MapSet.new([:chat])
+    capabilities = MapSet.new() |> MapSet.put(:chat)
 
     capabilities =
       if raw["tool_use"] != false,

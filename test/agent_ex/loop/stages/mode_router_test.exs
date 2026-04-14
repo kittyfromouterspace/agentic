@@ -218,3 +218,98 @@ defmodule AgentEx.Loop.Stages.ModeRouterTest do
     end
   end
 end
+
+defmodule AgentEx.Loop.Stages.ModeRouterTelemetryTest do
+  use ExUnit.Case, async: false
+
+  alias AgentEx.Loop.Stages.ModeRouter
+
+  import AgentEx.TestHelpers
+
+  defp passthrough, do: fn ctx -> {:ok, ctx} end
+
+  setup do
+    test_pid = self()
+    ref = make_ref()
+    handler_id = "test-turn-telemetry-#{inspect(ref)}"
+
+    :telemetry.attach(
+      handler_id,
+      [:agent_ex, :orchestration, :turn],
+      fn _event, measurements, metadata, _config ->
+        send(test_pid, {:turn_event, measurements, metadata})
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+    :ok
+  end
+
+  describe "turn telemetry on all done paths" do
+    test "max_tokens emits turn event" do
+      ctx =
+        build_ctx()
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "Partial"}],
+          stop_reason: :max_tokens
+        })
+
+      assert {:done, _} = ModeRouter.call(ctx, passthrough())
+      assert_received {:turn_event, %{}, %{stop_reason: :max_tokens, mode: :agentic}}
+    end
+
+    test "conversational end_turn emits turn event" do
+      ctx =
+        build_ctx(mode: :conversational)
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "Hi"}],
+          stop_reason: :end_turn
+        })
+
+      assert {:done, _} = ModeRouter.call(ctx, passthrough())
+      assert_received {:turn_event, %{}, %{stop_reason: :end_turn, mode: :conversational}}
+    end
+
+    test "agentic_planned verify emits turn event" do
+      ctx =
+        build_ctx(mode: :agentic_planned, phase: :verify)
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "Verified."}],
+          stop_reason: :end_turn
+        })
+
+      assert {:done, _} = ModeRouter.call(ctx, passthrough())
+      assert_received {:turn_event, %{}, %{stop_reason: :end_turn, mode: :agentic_planned}}
+    end
+
+    test "unknown stop reason emits turn event" do
+      ctx =
+        build_ctx()
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [%{type: :text, text: "Huh"}],
+          stop_reason: :weird
+        })
+
+      assert {:done, _} = ModeRouter.call(ctx, passthrough())
+      assert_received {:turn_event, %{}, %{stop_reason: :unknown, mode: :agentic}}
+    end
+
+    test "max_turns emits turn event" do
+      ctx =
+        build_ctx()
+        |> Map.put(:last_response, %AgentEx.LLM.Response{
+          content: [
+            %{type: :text, text: "More"},
+            %{type: :tool_use, id: "c1", name: "bash", input: %{"command" => "ls"}}
+          ],
+          stop_reason: :tool_use
+        })
+        |> Map.put(:turns_used, 50)
+        |> Map.put(:config, %{max_turns: 50, telemetry_prefix: [:agent_ex]})
+
+      assert {:done, _} = ModeRouter.call(ctx, passthrough())
+      assert_received {:turn_event, %{}, %{stop_reason: :max_turns, mode: :agentic}}
+    end
+  end
+end

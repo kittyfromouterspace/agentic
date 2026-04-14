@@ -13,13 +13,15 @@ defmodule AgentEx.Application do
       AgentEx.LLM.Catalog,
       AgentEx.LLM.UsageManager,
       AgentEx.ModelRouter,
-      AgentEx.Protocol.Registry
+      AgentEx.Protocol.Registry,
+      AgentEx.Telemetry.Aggregator
     ]
 
     opts = [strategy: :one_for_one, name: AgentEx.Supervisor]
 
     # Initialize ETS tables
     AgentEx.CircuitBreaker.init()
+    AgentEx.LLM.Credentials.init_store()
 
     # Register built-in protocols
     register_protocols()

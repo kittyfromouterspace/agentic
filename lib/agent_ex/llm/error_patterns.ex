@@ -42,8 +42,7 @@ defmodule AgentEx.LLM.ErrorPatterns do
 
   def classify_message(_), do: nil
 
-  # --- :rate_limit ---
-
+  @doc "Classify rate-limiting errors from a lowered message string."
   @spec classify_rate_limit(String.t()) :: :rate_limit | nil
   def classify_rate_limit(lowered) when is_binary(lowered) do
     cond do
@@ -83,8 +82,7 @@ defmodule AgentEx.LLM.ErrorPatterns do
     end
   end
 
-  # --- :overloaded ---
-
+  @doc "Classify service-overloaded errors from a lowered message string."
   @spec classify_overloaded(String.t()) :: :overloaded | nil
   def classify_overloaded(lowered) when is_binary(lowered) do
     cond do
@@ -105,8 +103,7 @@ defmodule AgentEx.LLM.ErrorPatterns do
     end
   end
 
-  # --- :billing ---
-
+  @doc "Classify billing/payment errors from a lowered message string."
   @spec classify_billing(String.t()) :: :billing | nil
   def classify_billing(lowered) when is_binary(lowered) do
     cond do
@@ -138,8 +135,7 @@ defmodule AgentEx.LLM.ErrorPatterns do
     end
   end
 
-  # --- :auth_permanent ---
-
+  @doc "Classify permanent auth errors (revoked keys, disabled accounts) from a lowered message string."
   @spec classify_auth_permanent(String.t()) :: :auth_permanent | nil
   def classify_auth_permanent(lowered) when is_binary(lowered) do
     cond do
@@ -159,8 +155,7 @@ defmodule AgentEx.LLM.ErrorPatterns do
     end
   end
 
-  # --- :auth ---
-
+  @doc "Classify transient auth errors (invalid key, expired token) from a lowered message string."
   @spec classify_auth(String.t()) :: :auth | nil
   def classify_auth(lowered) when is_binary(lowered) do
     cond do
@@ -210,8 +205,7 @@ defmodule AgentEx.LLM.ErrorPatterns do
     end
   end
 
-  # --- :timeout ---
-
+  @doc "Classify timeout and network errors from a lowered message string."
   @spec classify_timeout(String.t()) :: :timeout | nil
   def classify_timeout(lowered) when is_binary(lowered) do
     cond do
@@ -269,8 +263,7 @@ defmodule AgentEx.LLM.ErrorPatterns do
     end
   end
 
-  # --- :format ---
-
+  @doc "Classify bad-request format errors from a lowered message string."
   @spec classify_format(String.t()) :: :format | nil
   def classify_format(lowered) when is_binary(lowered) do
     cond do
@@ -290,8 +283,7 @@ defmodule AgentEx.LLM.ErrorPatterns do
     end
   end
 
-  # --- :model_not_found ---
-
+  @doc "Classify model-not-found errors from a lowered message string."
   @spec classify_model_not_found(String.t()) :: :model_not_found | nil
   def classify_model_not_found(lowered) when is_binary(lowered) do
     cond do
@@ -307,8 +299,7 @@ defmodule AgentEx.LLM.ErrorPatterns do
     end
   end
 
-  # --- :session_expired ---
-
+  @doc "Classify session-expired errors from a lowered message string."
   @spec classify_session_expired(String.t()) :: :session_expired | nil
   def classify_session_expired(lowered) when is_binary(lowered) do
     cond do
@@ -320,10 +311,12 @@ defmodule AgentEx.LLM.ErrorPatterns do
     end
   end
 
-  # --- :context_overflow ---
-  # Two-pass detection: first try the explicit patterns, then fall back
-  # to the generic two-keyword heuristic.
+  @doc """
+  Classify context-overflow errors from a lowered message string.
 
+  Uses two-pass detection: first explicit patterns, then a generic
+  two-keyword heuristic.
+  """
   @spec classify_context_overflow(String.t()) :: :context_overflow | nil
   def classify_context_overflow(lowered) when is_binary(lowered) do
     cond do

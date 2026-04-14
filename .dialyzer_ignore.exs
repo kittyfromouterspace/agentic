@@ -1,6 +1,5 @@
 [
   ~r"lib/mix/tasks/agent_ex.test_setup_mneme.ex.*callback_info_missing",
-  ~r"lib/mix/tasks/agent_ex.test_setup_mneme.ex.*unknown_function",
   ~r"lib/agent_ex/skill/analyzer.ex.*pattern_match",
   ~r"lib/agent_ex/skill/analyzer.ex.*unused_fun",
   ~r"lib/agent_ex/skill/core_skills.ex.*pattern_match",

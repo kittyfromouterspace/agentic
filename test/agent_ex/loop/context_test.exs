@@ -22,6 +22,7 @@ defmodule AgentEx.Loop.ContextTest do
       assert ctx.accumulated_text == ""
       assert ctx.pending_tool_calls == []
       assert ctx.phase == :execute
+      assert ctx.strategy == :default
     end
 
     test "creates context with provided values" do
@@ -33,6 +34,7 @@ defmodule AgentEx.Loop.ContextTest do
           metadata: %{workspace: "/tmp"},
           messages: [%{"role" => "system", "content" => "hi"}],
           model_tier: :lightweight,
+          strategy: :stigmergy,
           callbacks: %{llm_chat: fn _ -> :ok end}
         )
 
@@ -42,6 +44,7 @@ defmodule AgentEx.Loop.ContextTest do
       assert ctx.metadata == %{workspace: "/tmp"}
       assert length(ctx.messages) == 1
       assert ctx.model_tier == :lightweight
+      assert ctx.strategy == :stigmergy
       assert is_function(ctx.callbacks[:llm_chat])
     end
   end

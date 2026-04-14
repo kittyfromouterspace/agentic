@@ -53,6 +53,7 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
     text = Helpers.extract_text(content)
     ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
     emit_route_event(ctx, :max_tokens, "done")
+    emit_turn_event(ctx, :max_tokens)
     {:done, Helpers.result_from_context(ctx)}
   end
 
@@ -61,6 +62,7 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
     maybe_run_callback(ctx.callbacks[:on_response_facts], ctx, text)
     ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
     emit_route_event(ctx, "end_turn", "done")
+    emit_turn_event(ctx, :end_turn)
     {:done, Helpers.result_from_context(ctx)}
   end
 
@@ -115,6 +117,7 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
     text = Helpers.extract_text(content)
     ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
     emit_route_event(ctx, :end_turn, "done")
+    emit_turn_event(ctx, :end_turn)
     {:done, Helpers.result_from_context(ctx)}
   end
 
@@ -144,6 +147,7 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
 
       {:error, _} ->
         emit_route_event(ctx, :end_turn, "done")
+        emit_turn_event(ctx, :end_turn)
         {:done, Helpers.result_from_context(ctx)}
     end
   end
@@ -157,6 +161,7 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
     text = Helpers.extract_text(content)
     ctx = %{ctx | accumulated_text: Helpers.join_text(ctx.accumulated_text, text)}
     emit_route_event(ctx, :unknown, "done")
+    emit_turn_event(ctx, :unknown)
     {:done, Helpers.result_from_context(ctx)}
   end
 
@@ -223,6 +228,7 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
         "ModeRouter: max_turns (#{ctx.config.max_turns}) reached for #{ctx.session_id}"
       )
 
+      emit_turn_event(ctx, :max_turns)
       {:done, Helpers.result_from_context(ctx)}
     else
       next.(ctx)
@@ -297,7 +303,8 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
       mode: ctx.mode,
       phase: ctx.phase,
       stop_reason: stop_reason,
-      action: action
+      action: action,
+      strategy: ctx.strategy
     })
   end
 
@@ -305,4 +312,14 @@ defmodule AgentEx.Loop.Stages.ModeRouter do
   defp maybe_run_callback(_cb, _ctx, ""), do: :ok
   defp maybe_run_callback(cb, ctx, text) when is_function(cb, 2), do: cb.(ctx, text)
   defp maybe_run_callback(_, _, _), do: :ok
+
+  defp emit_turn_event(ctx, stop_reason) do
+    Telemetry.event([:orchestration, :turn], %{}, %{
+      session_id: ctx.session_id,
+      strategy: ctx.strategy,
+      mode: ctx.mode,
+      phase: ctx.phase,
+      stop_reason: stop_reason
+    })
+  end
 end

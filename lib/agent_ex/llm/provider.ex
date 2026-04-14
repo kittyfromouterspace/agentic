@@ -60,7 +60,7 @@ defmodule AgentEx.LLM.Provider do
   def chat(provider, params, opts \\ []) do
     transport_mod = provider.transport()
 
-    case Credentials.resolve(provider) do
+    case Credentials.resolve(provider, opts) do
       {:ok, creds} ->
         base_url = creds.base_url_override || provider.default_base_url()
 
@@ -121,7 +121,7 @@ defmodule AgentEx.LLM.Provider do
     transport_mod = provider.transport()
     on_chunk = Keyword.get(opts, :on_chunk, fn _ -> :ok end)
 
-    case Credentials.resolve(provider) do
+    case Credentials.resolve(provider, opts) do
       {:ok, creds} ->
         base_url = creds.base_url_override || provider.default_base_url()
 

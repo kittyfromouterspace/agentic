@@ -21,7 +21,7 @@ defmodule AgentEx.LLM.ErrorClassifier do
   When the provider implements the optional `classify_http_error/3`
   callback, its result takes precedence over the generic baseline.
   """
-  @spec classify(non_neg_integer() | nil, term(), term(), module() | nil) :: classification()
+  @spec classify(non_neg_integer() | nil, term(), term(), module() | nil) :: {atom(), term()}
   def classify(status, body, headers, provider \\ nil) do
     message = stringify_body(body)
 

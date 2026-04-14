@@ -183,32 +183,22 @@ defmodule AgentEx.LLM.Provider.OpenRouter do
     prompt_price = parse_price(pricing["prompt"])
     completion_price = parse_price(pricing["completion"])
 
-    capabilities = MapSet.new()
-
     capabilities =
-      if "tools" in params,
-        do: MapSet.put(capabilities, :tools),
-        else: capabilities
-
-    capabilities =
-      if "text" in output,
-        do: MapSet.put(capabilities, :chat),
-        else: capabilities
-
-    capabilities =
-      if "embeddings" in (raw["output_modalities"] || output),
-        do: MapSet.put(capabilities, :embeddings),
-        else: capabilities
-
-    capabilities =
-      if "reasoning" in params,
-        do: MapSet.put(capabilities, :reasoning),
-        else: capabilities
-
-    capabilities =
-      if prompt_price == 0.0 and completion_price == 0.0,
-        do: MapSet.put(capabilities, :free),
-        else: capabilities
+      []
+      |> then(fn caps -> if "tools" in params, do: [:tools | caps], else: caps end)
+      |> then(fn caps -> if "text" in output, do: [:chat | caps], else: caps end)
+      |> then(fn caps ->
+        if "embeddings" in (raw["output_modalities"] || output),
+          do: [:embeddings | caps],
+          else: caps
+      end)
+      |> then(fn caps -> if "reasoning" in params, do: [:reasoning | caps], else: caps end)
+      |> then(fn caps ->
+        if prompt_price == 0.0 and completion_price == 0.0,
+          do: [:free | caps],
+          else: caps
+      end)
+      |> MapSet.new()
 
     tier_hint =
       cond do

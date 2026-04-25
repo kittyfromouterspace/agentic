@@ -13,6 +13,7 @@ defmodule Agentic.Loop.Stages.ContextGuard do
   @behaviour Agentic.Loop.Stage
 
   alias Agentic.Loop.Context
+  alias Agentic.Loop.ContextCompression
   alias Agentic.Telemetry
 
   require Logger
@@ -26,8 +27,12 @@ defmodule Agentic.Loop.Stages.ContextGuard do
   # Fallback cost limit if not set in config
   @default_cost_limit_usd 5.0
 
-  # Minimum messages to keep before compaction (system + last few exchanges)
-  @min_messages_to_keep 6
+  # Minimum messages to keep before compaction.
+  # Scales with context window: keep at least 12 messages, or 10% of
+  # estimated capacity, whichever is larger. This preserves more
+  # conversation context than the previous hardcoded value of 6.
+  @min_messages_base 12
+  @min_messages_pct_of_window 0.10
 
   @impl true
   def call(%Context{} = ctx, next) do
@@ -57,7 +62,7 @@ defmodule Agentic.Loop.Stages.ContextGuard do
 
         messages_before = length(ctx.messages)
         pct_before = estimate_usage(ctx)
-        ctx = compact_messages(ctx)
+        {ctx, was_summarized} = compact_messages(ctx)
         pct_after = estimate_usage(ctx)
 
         Telemetry.event(
@@ -66,7 +71,8 @@ defmodule Agentic.Loop.Stages.ContextGuard do
             messages_before: messages_before,
             messages_after: length(ctx.messages),
             pct_before: pct_before,
-            pct_after: pct_after
+            pct_after: pct_after,
+            summarized: was_summarized
           },
           %{session_id: ctx.session_id}
         )
@@ -82,7 +88,16 @@ defmodule Agentic.Loop.Stages.ContextGuard do
   defp should_compact?(ctx) do
     threshold = ctx.config[:compaction_at_pct] || 0.80
     usage = estimate_usage(ctx)
-    usage >= threshold and length(ctx.messages) > @min_messages_to_keep
+    min_keep = min_messages_to_keep(ctx)
+    usage >= threshold and length(ctx.messages) > min_keep
+  end
+
+  defp min_messages_to_keep(ctx) do
+    window = resolve_context_window(ctx)
+    # Estimate: each exchange is ~2 messages (user + assistant)
+    # Keep enough for meaningful context
+    pct_based = round(window * @min_messages_pct_of_window / 50)
+    max(@min_messages_base, pct_based)
   end
 
   defp estimate_usage(ctx) do
@@ -143,13 +158,43 @@ defmodule Agentic.Loop.Stages.ContextGuard do
   defp compact_messages(ctx) do
     messages = ctx.messages
     total = length(messages)
+    min_keep = min_messages_to_keep(ctx)
 
-    keep_recent = min(@min_messages_to_keep, total - 1)
+    # First, try LLM-based summarization via ContextCompression for severe overflow
+    context_window = resolve_context_window(ctx)
+    token_budget = round(context_window * (ctx.config[:compaction_at_pct] || 0.80) * 0.9)
+
+    {compacted, was_summarized} =
+      if total > min_keep * 2 and ContextCompression.available?(ctx) do
+        # Severe overflow: try LLM summarization
+        case ContextCompression.compress(messages, token_budget, ctx) do
+          {compressed, true} ->
+            Logger.info(
+              "ContextGuard: LLM-summarized context for #{ctx.session_id} " <>
+                "(#{total} -> #{length(compressed)} messages)"
+            )
+            {compressed, true}
+
+          {compressed, false} ->
+            # Fallback to deterministic truncation
+            {deterministic_compact(messages, total, min_keep), false}
+        end
+      else
+        {deterministic_compact(messages, total, min_keep), false}
+      end
+
+    ctx = %{ctx | messages: compacted, context_pct: estimate_usage(%{ctx | messages: compacted})}
+    {ctx, was_summarized}
+  end
+
+  # Deterministic compaction: keep system + recent, summarize middle.
+  defp deterministic_compact(messages, total, min_keep) do
+    keep_recent = min(min_keep, total - 1)
     {head, recent} = Enum.split(messages, total - keep_recent)
 
     case head do
       [system_msg | older] when older != [] ->
-        summary = summarize_messages(older)
+        summary = summarize_messages_deterministic(older)
 
         handoff_msg = %{
           "role" => "user",
@@ -158,20 +203,14 @@ defmodule Agentic.Loop.Stages.ContextGuard do
               summary <> "\n\nContinue from where you left off.]"
         }
 
-        compacted = [system_msg, handoff_msg | recent]
-
-        Logger.info(
-          "ContextGuard: compacted #{length(older)} messages into handoff summary for #{ctx.session_id}"
-        )
-
-        %{ctx | messages: compacted, context_pct: estimate_usage(%{ctx | messages: compacted})}
+        [system_msg, handoff_msg | recent]
 
       _ ->
-        %{ctx | context_pct: estimate_usage(ctx)}
+        messages
     end
   end
 
-  defp summarize_messages(messages) do
+  defp summarize_messages_deterministic(messages) do
     messages
     |> Enum.reduce([], fn msg, acc ->
       case msg["role"] do

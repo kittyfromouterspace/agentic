@@ -166,8 +166,16 @@ defmodule Agentic.Loop.Stages.WorkspaceSnapshot do
     Enum.find_index(messages, fn msg -> msg["role"] == "system" end) || 0
   end
 
+  # 5-second timeout for git commands to prevent blocking the agent loop
+  # on slow filesystems or large repositories.
+  @git_timeout_ms 5_000
+
   defp run_git(workspace, args) do
-    case System.cmd("git", String.split(args, " "), cd: workspace, stderr_to_stdout: true) do
+    case System.cmd("git", String.split(args, " "),
+           cd: workspace,
+           stderr_to_stdout: true,
+           timeout: @git_timeout_ms
+         ) do
       {output, 0} -> {:ok, output}
       _ -> :error
     end

@@ -18,6 +18,11 @@ defmodule Agentic.Loop.ContextCompression do
   @chars_per_token 3.5
   @max_summary_tokens 2000
 
+  @doc "Check if LLM-based summarization is available for this context."
+  def available?(ctx) do
+    is_function(ctx.callbacks[:llm_chat], 1)
+  end
+
   @doc """
   Compress messages to fit within a token budget.
 

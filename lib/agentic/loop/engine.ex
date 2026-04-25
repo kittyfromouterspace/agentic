@@ -83,7 +83,8 @@ defmodule Agentic.Loop.Engine do
       text: ctx.accumulated_text,
       cost: ctx.total_cost,
       tokens: ctx.total_tokens,
-      steps: ctx.turns_used
+      steps: ctx.turns_used,
+      messages: ctx.messages
     }
   end
 end

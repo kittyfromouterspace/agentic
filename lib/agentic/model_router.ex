@@ -101,14 +101,21 @@ defmodule Agentic.ModelRouter do
 
   @doc """
   Like `resolve_all_with_accounts/2`, but also accepts a
-  `canonical_id => preferred_provider_atom` map. Pathways whose
-  provider is the user's preferred pathway for their canonical group
-  get a strong score bonus (acts as a hard tie-breaker — within a
-  canonical group, the user's pick wins over the cost-derived ranking
-  unless that pick is `:unavailable`).
+  `canonical_id => preferred_provider_atom` map and the user's price/
+  speed preference. Pathways whose provider is the user's preferred
+  pathway for their canonical group get a strong score bonus (acts
+  as a hard tie-breaker — within a canonical group, the user's pick
+  wins over the cost-derived ranking unless that pick is
+  `:unavailable`). The preference (`:optimize_price` |
+  `:optimize_speed`) is threaded into `Preference.score_pathway/3` so
+  the canonical grouping reflects the user's real ranking criterion
+  rather than always defaulting to price.
   """
-  def resolve_all_with_context(tier, accounts, pathway_preferences) do
-    GenServer.call(__MODULE__, {:resolve_all_with_context, tier, accounts, pathway_preferences})
+  def resolve_all_with_context(tier, accounts, pathway_preferences, preference \\ :optimize_price) do
+    GenServer.call(
+      __MODULE__,
+      {:resolve_all_with_context, tier, accounts, pathway_preferences, preference}
+    )
   catch
     :exit, _ -> {:error, :router_unavailable}
   end
@@ -220,8 +227,12 @@ defmodule Agentic.ModelRouter do
           model_filter = Map.get(ctx, :model_filter)
           accounts = (ctx.metadata || %{})[:provider_accounts]
           pathway_preferences = (ctx.metadata || %{})[:pathway_preferences] || %{}
+          # Pull the user's price/speed preference so canonical
+          # grouping reflects it. Defaults to :optimize_price for the
+          # legacy manual-mode flow that never declared a preference.
+          preference = Map.get(ctx, :model_preference, :optimize_price)
 
-          case resolve_all_with_context(tier, accounts, pathway_preferences) do
+          case resolve_all_with_context(tier, accounts, pathway_preferences, preference) do
             {:ok, routes} ->
               routes = filter_routes(routes, model_filter)
 
@@ -395,9 +406,23 @@ defmodule Agentic.ModelRouter do
     {:reply, {:ok, routes}, state}
   end
 
-  def handle_call({:resolve_all_with_context, tier, accounts, pathway_preferences}, _from, state) do
-    routes = routes_for_tier(tier, state, accounts, pathway_preferences)
+  def handle_call(
+        {:resolve_all_with_context, tier, accounts, pathway_preferences, preference},
+        _from,
+        state
+      ) do
+    routes = routes_for_tier(tier, state, accounts, pathway_preferences, preference)
     {:reply, {:ok, routes}, state}
+  end
+
+  # Backwards-compat: pre-preference clause kept until any in-flight
+  # callers shake out. New code uses the 5-tuple variant above.
+  def handle_call({:resolve_all_with_context, tier, accounts, pathway_preferences}, from, state) do
+    handle_call(
+      {:resolve_all_with_context, tier, accounts, pathway_preferences, :optimize_price},
+      from,
+      state
+    )
   end
 
   def handle_call({:get_sticky, bucket}, _from, state) do
@@ -511,7 +536,7 @@ defmodule Agentic.ModelRouter do
 
   # ----- route resolution via Catalog (manual mode) -----
 
-  defp routes_for_tier(tier, state, accounts \\ nil, pathway_preferences \\ %{}) do
+  defp routes_for_tier(tier, state, accounts \\ nil, pathway_preferences \\ %{}, preference \\ :optimize_price) do
     effective_tier = if tier == :any, do: nil, else: tier
 
     catalog_models =
@@ -545,7 +570,7 @@ defmodule Agentic.ModelRouter do
           models
           |> Enum.map(fn m ->
             account = ProviderAccount.for_provider(accounts, m.provider)
-            base = score_for_pathway(m, account)
+            base = score_for_pathway(m, account, preference)
             preference_bonus = if preferred_provider == m.provider, do: -100.0, else: 0.0
             {m, account, base + preference_bonus}
           end)
@@ -576,11 +601,16 @@ defmodule Agentic.ModelRouter do
   defp canonical_key(%Model{canonical_id: nil} = m), do: "#{m.provider}:#{m.id}"
   defp canonical_key(%Model{canonical_id: c}) when is_binary(c), do: c
 
-  # Compute the pathway score for `(model, account)`. Default preference
-  # is `:optimize_price`; the manual-mode tier flow pre-dates per-context
-  # preferences and historical behaviour matches "cheapest available".
+  # Compute the pathway score for `(model, account, preference)`.
+  # Falls back to `:optimize_price` for callers that pre-date the
+  # preference plumbing. The historical manual-mode flow always
+  # ranked by price, so that's the safe default.
+  defp score_for_pathway(%Model{} = model, %ProviderAccount{} = account, preference) do
+    Preference.score_pathway(model, account, preference)
+  end
+
   defp score_for_pathway(%Model{} = model, %ProviderAccount{} = account) do
-    Preference.score_pathway(model, account, :optimize_price)
+    score_for_pathway(model, account, :optimize_price)
   end
 
   defp resolve_override(tier, overrides) do

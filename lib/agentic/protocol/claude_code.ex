@@ -416,8 +416,11 @@ defmodule Agentic.Protocol.ClaudeCode do
             content = message["content"] || ""
             usage = message["usage"] || %{}
             stop_reason = message["stop_reason"]
+            total_cost_usd = message["total_cost_usd"]
 
             tool_calls = extract_tool_calls(new_buffer)
+
+            emit_cli_complete(session_id, :claude_code, usage, total_cost_usd)
 
             {:ok,
              %{
@@ -427,7 +430,8 @@ defmodule Agentic.Protocol.ClaudeCode do
                stop_reason: stop_reason,
                metadata: %{
                  session_id: session_id,
-                 protocol: :claude_code
+                 protocol: :claude_code,
+                 total_cost_usd: total_cost_usd
                }
              }}
 
@@ -466,4 +470,55 @@ defmodule Agentic.Protocol.ClaudeCode do
         []
     end
   end
+
+  # Emit `[:agentic, :protocol, :cli, :complete]` carrying the CLI's
+  # self-reported `total_cost_usd` and token counts. SpendTracker
+  # treats the gateway tap as source of truth (it sees the actual
+  # HTTP request the CLI subprocess makes) and uses this event only
+  # for discrepancy warnings — see §5.3 of the multi-pathway routing
+  # proposal.
+  defp emit_cli_complete(session_id, protocol, usage, total_cost_usd) do
+    actual_cost =
+      case total_cost_usd do
+        n when is_number(n) and n > 0 ->
+          try do
+            Money.from_float(:USD, n)
+          rescue
+            _ -> nil
+          end
+
+        _ ->
+          nil
+      end
+
+    Agentic.Telemetry.event(
+      [:agentic, :protocol, :cli, :complete],
+      %{
+        input_tokens: get_token(usage, ["input_tokens", "prompt_tokens"]),
+        output_tokens: get_token(usage, ["output_tokens", "completion_tokens"]),
+        cache_read_tokens: get_token(usage, ["cache_read_input_tokens", "cache_read"]),
+        cache_write_tokens: get_token(usage, ["cache_creation_input_tokens", "cache_write"])
+      },
+      %{
+        session_id: session_id,
+        protocol: protocol,
+        provider: protocol,
+        actual_cost: actual_cost,
+        cli_reported_cost_usd: total_cost_usd
+      }
+    )
+  rescue
+    _ -> :ok
+  end
+
+  defp get_token(usage, keys) when is_map(usage) do
+    Enum.find_value(keys, 0, fn k ->
+      case Map.get(usage, k) do
+        n when is_integer(n) -> n
+        _ -> nil
+      end
+    end) || 0
+  end
+
+  defp get_token(_, _), do: 0
 end

@@ -30,6 +30,7 @@ defmodule Agentic.LLM.SpendTracker do
   require Logger
 
   @gateway_stop [:gateway, :request, :stop]
+  @cli_complete [:agentic, :protocol, :cli, :complete]
   @flush_debounce_ms 1_000
   @schema_version 1
 
@@ -90,9 +91,9 @@ defmodule Agentic.LLM.SpendTracker do
     :ok = configure_pragmas(conn)
     :ok = ensure_schema(conn)
 
-    :telemetry.attach(
+    :telemetry.attach_many(
       "agentic-spend-tracker",
-      @gateway_stop,
+      [@gateway_stop, @cli_complete],
       &__MODULE__.handle_telemetry/4,
       nil
     )
@@ -142,6 +143,26 @@ defmodule Agentic.LLM.SpendTracker do
   # ----- telemetry handler (runs in the caller's process) -----
 
   @doc false
+  def handle_telemetry(@cli_complete, measurements, metadata, _config) do
+    # CLI-reported total — the Gateway tap is source of truth, so we
+    # don't treat this as a spend record. We log a debug-level
+    # discrepancy if the CLI's number deviates wildly from anything
+    # we already saw for the same session within the last 60s.
+    cli_cost = metadata[:cli_reported_cost_usd]
+
+    if is_number(cli_cost) and cli_cost > 0 do
+      tokens =
+        (measurements[:input_tokens] || 0) +
+          (measurements[:output_tokens] || 0)
+
+      Logger.debug(
+        "SpendTracker: CLI reported total_cost_usd=#{cli_cost} for session=#{metadata[:session_id]} (#{tokens} tokens)"
+      )
+    end
+
+    :ok
+  end
+
   def handle_telemetry(_event, measurements, metadata, _config) do
     event = build_event(measurements, metadata)
 

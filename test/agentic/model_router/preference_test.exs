@@ -242,4 +242,142 @@ defmodule Agentic.ModelRouter.PreferenceTest do
       assert large_score < small_score
     end
   end
+
+  # ── Multi-pathway score_pathway/3 (Phase 1.6) ────────────────
+
+  describe "score_pathway/3 — cost_profile dominates within a canonical group" do
+    alias Agentic.LLM.ProviderAccount
+
+    defp model_with_cost(input, output) do
+      %Model{
+        id: "test-model",
+        provider: :anthropic,
+        capabilities: MapSet.new([:chat, :tools]),
+        cost: %{input: input, output: output},
+        tier_hint: :primary,
+        source: :static
+      }
+    end
+
+    test "subscription_included beats pay_per_token under :optimize_price" do
+      model = model_with_cost(3.0, 15.0)
+
+      sub = %ProviderAccount{
+        provider: :anthropic,
+        cost_profile: :subscription_included,
+        availability: :ready
+      }
+
+      ppt = %ProviderAccount{
+        provider: :anthropic,
+        cost_profile: :pay_per_token,
+        availability: :ready
+      }
+
+      assert Preference.score_pathway(model, sub, :optimize_price) <
+               Preference.score_pathway(model, ppt, :optimize_price)
+    end
+
+    test "free beats subscription_included under :optimize_price" do
+      model = model_with_cost(0.0, 0.0)
+
+      free = %ProviderAccount{
+        provider: :ollama,
+        cost_profile: :free,
+        availability: :ready
+      }
+
+      sub = %ProviderAccount{
+        provider: :anthropic,
+        cost_profile: :subscription_included,
+        availability: :ready
+      }
+
+      assert Preference.score_pathway(model, free, :optimize_price) <
+               Preference.score_pathway(model, sub, :optimize_price)
+    end
+
+    test "degraded availability adds a small penalty over ready" do
+      model = model_with_cost(3.0, 15.0)
+
+      ready = %ProviderAccount{
+        provider: :anthropic,
+        cost_profile: :pay_per_token,
+        availability: :ready
+      }
+
+      degraded = %ProviderAccount{
+        provider: :anthropic,
+        cost_profile: :pay_per_token,
+        availability: :degraded
+      }
+
+      assert Preference.score_pathway(model, degraded, :optimize_price) >
+               Preference.score_pathway(model, ready, :optimize_price)
+    end
+
+    test "rate_limited gets a heavier penalty than degraded" do
+      model = model_with_cost(3.0, 15.0)
+      until = DateTime.add(DateTime.utc_now(), 60, :second)
+
+      degraded = %ProviderAccount{
+        provider: :anthropic,
+        cost_profile: :pay_per_token,
+        availability: :degraded
+      }
+
+      rate_limited = %ProviderAccount{
+        provider: :anthropic,
+        cost_profile: :pay_per_token,
+        availability: {:rate_limited, until}
+      }
+
+      assert Preference.score_pathway(model, rate_limited, :optimize_price) >
+               Preference.score_pathway(model, degraded, :optimize_price)
+    end
+
+    test "saturated subscription quota tapers above fresh pay_per_token" do
+      model = model_with_cost(3.0, 15.0)
+
+      # 2x the cap — should fully cliff (3 + 50*1.0 = +53) and
+      # outweigh the subscription's -5 cost-profile bonus, flipping
+      # the ranking so the router falls back to pay-per-token.
+      sub_saturated = %ProviderAccount{
+        provider: :anthropic,
+        cost_profile: :subscription_included,
+        availability: :ready,
+        quotas: %{tokens_used: 200_000, tokens_limit: 100_000, period_end: DateTime.utc_now()}
+      }
+
+      ppt = %ProviderAccount{
+        provider: :openrouter,
+        cost_profile: :pay_per_token,
+        availability: :ready
+      }
+
+      assert Preference.score_pathway(model, sub_saturated, :optimize_price) >
+               Preference.score_pathway(model, ppt, :optimize_price)
+    end
+
+    test "subscription quota pressure increases score monotonically" do
+      model = model_with_cost(3.0, 15.0)
+
+      light = %ProviderAccount{
+        provider: :anthropic,
+        cost_profile: :subscription_included,
+        availability: :ready,
+        quotas: %{tokens_used: 10_000, tokens_limit: 100_000, period_end: DateTime.utc_now()}
+      }
+
+      heavy = %ProviderAccount{
+        provider: :anthropic,
+        cost_profile: :subscription_included,
+        availability: :ready,
+        quotas: %{tokens_used: 95_000, tokens_limit: 100_000, period_end: DateTime.utc_now()}
+      }
+
+      assert Preference.score_pathway(model, light, :optimize_price) <
+               Preference.score_pathway(model, heavy, :optimize_price)
+    end
+  end
 end

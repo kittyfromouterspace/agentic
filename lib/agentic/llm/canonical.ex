@@ -63,6 +63,18 @@ defmodule Agentic.LLM.Canonical do
     {:zai, "glm-5.1"} => "glm-5.1",
     {:zai, "glm-5-turbo"} => "glm-5-turbo",
 
+    # Gemini CLI — Google models served via the gemini binary.
+    {:gemini, "google/gemini-3-pro"} => "gemini-3-pro",
+    {:gemini, "google/gemini-3-flash"} => "gemini-3-flash",
+
+    # Kimi Code — Moonshot K2 family.
+    {:kimi, "moonshot/k2"} => "moonshot-k2",
+    {:kimi, "moonshot/k2-thinking"} => "moonshot-k2-thinking",
+
+    # Qwen Code — Alibaba Qwen family.
+    {:qwen, "alibaba/qwen3-coder"} => "qwen3-coder",
+    {:qwen, "alibaba/qwen3-max"} => "qwen3-max",
+
     # Anthropic direct: pin family canonicals so dated IDs collapse.
     {:anthropic, "claude-sonnet-4-20250514"} => "claude-sonnet-4",
     {:anthropic, "claude-opus-4-20250514"} => "claude-opus-4",

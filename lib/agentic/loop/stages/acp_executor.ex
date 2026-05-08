@@ -72,7 +72,7 @@ defmodule Agentic.Loop.Stages.ACPExecutor do
         end
 
       backend_config =
-        (ctx.backend_config || %{})
+        ctx.backend_config
         |> Map.put_new(:workspace, get_workspace(ctx))
         |> Map.put(
           :callbacks,

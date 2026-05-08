@@ -87,7 +87,7 @@ defmodule Agentic.Loop.Stages.CLIExecutor do
       backend_config =
         Map.merge(
           profile_config[:cli_config] || %{},
-          ctx.backend_config || %{}
+          ctx.backend_config
         )
 
       case protocol.start(backend_config, ctx) do

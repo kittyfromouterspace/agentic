@@ -92,6 +92,11 @@ defmodule Agentic.Loop.Context do
     # Strategy (orchestration layer)
     strategy: :default,
 
+    # AgentFS overlay state
+    agent_fs_overlay: nil,
+    agent_fs_cleanup: nil,
+    agent_fs_original_skills: [],
+
     # Pipeline state (set by stages, threaded through loop iterations)
     last_response: nil,
     pending_tool_calls: [],
@@ -149,9 +154,12 @@ defmodule Agentic.Loop.Context do
           model_selection_mode: :manual | :auto,
           model_preference: :optimize_price | :optimize_speed,
           model_filter: :free_only | nil,
-          activation: map(),
-          strategy: atom(),
-          last_response: Agentic.LLM.Response.t() | nil,
+           activation: map(),
+           strategy: atom(),
+           agent_fs_overlay: String.t() | nil,
+           agent_fs_cleanup: (() -> term()) | nil,
+           agent_fs_original_skills: list(String.t()),
+           last_response: Agentic.LLM.Response.t() | nil,
           pending_tool_calls: list(map()),
           reentry_pipeline: (t() -> term()) | nil,
           summary_nudge_sent: boolean(),

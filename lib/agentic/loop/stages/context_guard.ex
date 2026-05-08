@@ -173,6 +173,7 @@ defmodule Agentic.Loop.Stages.ContextGuard do
               "ContextGuard: LLM-summarized context for #{ctx.session_id} " <>
                 "(#{total} -> #{length(compressed)} messages)"
             )
+
             {compressed, true}
 
           {_compressed, false} ->

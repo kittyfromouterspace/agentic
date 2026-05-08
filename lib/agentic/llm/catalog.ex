@@ -473,7 +473,9 @@ defmodule Agentic.LLM.Catalog do
 
   defp maybe_filter_canonical(models, opts) do
     case Keyword.get(opts, :canonical) do
-      nil -> models
+      nil ->
+        models
+
       canonical when is_binary(canonical) ->
         Enum.filter(models, &(&1.canonical_id == canonical))
     end

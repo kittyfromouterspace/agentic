@@ -66,7 +66,11 @@ defmodule Agentic.LLM.AdminUsage do
   defp anthropic_usage(admin_key, opts) do
     params = anthropic_params(opts) ++ [group_by: ~w(model service_tier context_window)]
 
-    case Req.get(@anthropic_usage_url, headers: anthropic_headers(admin_key), params: params, receive_timeout: @http_timeout_ms) do
+    case Req.get(@anthropic_usage_url,
+           headers: anthropic_headers(admin_key),
+           params: params,
+           receive_timeout: @http_timeout_ms
+         ) do
       {:ok, %{status: 200, body: %{"data" => buckets}}} -> {:ok, buckets}
       {:ok, %{status: status, body: body}} -> {:error, {:http_status, status, body}}
       {:error, reason} -> {:error, reason}
@@ -76,7 +80,11 @@ defmodule Agentic.LLM.AdminUsage do
   defp anthropic_cost(admin_key, opts) do
     params = anthropic_params(opts)
 
-    case Req.get(@anthropic_cost_url, headers: anthropic_headers(admin_key), params: params, receive_timeout: @http_timeout_ms) do
+    case Req.get(@anthropic_cost_url,
+           headers: anthropic_headers(admin_key),
+           params: params,
+           receive_timeout: @http_timeout_ms
+         ) do
       {:ok, %{status: 200, body: %{"data" => buckets}}} -> {:ok, buckets}
       {:ok, %{status: status, body: body}} -> {:error, {:http_status, status, body}}
       {:error, reason} -> {:error, reason}
@@ -164,7 +172,11 @@ defmodule Agentic.LLM.AdminUsage do
   defp openai_completions_usage(admin_key, opts) do
     params = openai_params(opts) ++ [group_by: "model"]
 
-    case Req.get("#{@openai_base}/usage/completions", headers: openai_headers(admin_key), params: params, receive_timeout: @http_timeout_ms) do
+    case Req.get("#{@openai_base}/usage/completions",
+           headers: openai_headers(admin_key),
+           params: params,
+           receive_timeout: @http_timeout_ms
+         ) do
       {:ok, %{status: 200, body: %{"data" => buckets}}} -> {:ok, buckets}
       {:ok, %{status: status, body: body}} -> {:error, {:http_status, status, body}}
       {:error, reason} -> {:error, reason}
@@ -175,7 +187,11 @@ defmodule Agentic.LLM.AdminUsage do
     # OpenAI /costs only supports bucket_width=1d.
     params = openai_params(opts) |> Keyword.put(:bucket_width, "1d")
 
-    case Req.get("#{@openai_base}/costs", headers: openai_headers(admin_key), params: params, receive_timeout: @http_timeout_ms) do
+    case Req.get("#{@openai_base}/costs",
+           headers: openai_headers(admin_key),
+           params: params,
+           receive_timeout: @http_timeout_ms
+         ) do
       {:ok, %{status: 200, body: %{"data" => buckets}}} -> {:ok, buckets}
       {:ok, %{status: status, body: body}} -> {:error, {:http_status, status, body}}
       {:error, reason} -> {:error, reason}
@@ -223,7 +239,7 @@ defmodule Agentic.LLM.AdminUsage do
 
         list when is_list(list) ->
           list
-          |> Enum.map(&(&1["amount"]))
+          |> Enum.map(& &1["amount"])
           |> Enum.reject(&is_nil/1)
           |> sum_amounts()
       end
@@ -279,7 +295,8 @@ defmodule Agentic.LLM.AdminUsage do
 
   defp build_money_from_cost(nil), do: nil
 
-  defp build_money_from_cost(%{"value" => v, "currency" => c}) when is_number(v) and is_binary(c) do
+  defp build_money_from_cost(%{"value" => v, "currency" => c})
+       when is_number(v) and is_binary(c) do
     Money.from_float(currency_atom(c), v)
   rescue
     _ -> nil
@@ -288,7 +305,9 @@ defmodule Agentic.LLM.AdminUsage do
   defp build_money_from_cost(_), do: nil
 
   defp build_money_from_amount(nil), do: nil
-  defp build_money_from_amount(%{"value" => v, "currency" => c}), do: build_money_from_cost(%{"value" => v, "currency" => c})
+
+  defp build_money_from_amount(%{"value" => v, "currency" => c}),
+    do: build_money_from_cost(%{"value" => v, "currency" => c})
 
   defp currency_atom(s) when is_binary(s) do
     s |> String.upcase() |> String.to_atom()

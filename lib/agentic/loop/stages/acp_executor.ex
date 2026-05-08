@@ -8,9 +8,10 @@ defmodule Agentic.Loop.Stages.ACPExecutor do
   This stage replaces LLMCall for ACP-based agent profiles.
   """
 
-  alias Agentic.Protocol.Registry
-
   @behaviour Agentic.Loop.Stage
+
+  alias Agentic.Loop.Profile
+  alias Agentic.Protocol.Registry
 
   @impl true
   def call(ctx, next) do
@@ -18,7 +19,7 @@ defmodule Agentic.Loop.Stages.ACPExecutor do
 
     ctx = ensure_session(ctx, protocol)
 
-    profile_config = Agentic.Loop.Profile.config(ctx.profile || :agentic)
+    profile_config = Profile.config(ctx.profile || :agentic)
 
     messages = format_messages_for_acp(ctx)
 
@@ -47,7 +48,7 @@ defmodule Agentic.Loop.Stages.ACPExecutor do
       ctx.protocol_module
     else
       profile = ctx.profile || :agentic
-      profile_config = Agentic.Loop.Profile.config(profile)
+      profile_config = Profile.config(profile)
       protocol_name = profile_config[:protocol] || :llm
 
       case Registry.lookup(protocol_name) do
@@ -63,10 +64,19 @@ defmodule Agentic.Loop.Stages.ACPExecutor do
     if ctx.protocol_session_id do
       ctx
     else
+      # Mount AgentFS overlay before starting the session
+      {overlay_path, ctx} =
+        case Agentic.AgentFS.mount(ctx) do
+          :noop -> {nil, ctx}
+          {path, updated_ctx} -> {path, updated_ctx}
+        end
+
       backend_config =
-        Map.merge(
-          (ctx.backend_config || %{}) |> Map.put_new(:workspace, get_workspace(ctx)),
-          %{callbacks: ctx.callbacks}
+        (ctx.backend_config || %{})
+        |> Map.put_new(:workspace, get_workspace(ctx))
+        |> Map.put(
+          :callbacks,
+          ctx.callbacks
         )
 
       case protocol.start(backend_config, ctx) do
@@ -80,6 +90,8 @@ defmodule Agentic.Loop.Stages.ACPExecutor do
           }
 
         {:error, reason} ->
+          # Unmount on failure
+          if overlay_path, do: Agentic.AgentFS.unmount(ctx), else: :ok
           raise "Failed to start ACP session: #{inspect(reason)}"
       end
     end
@@ -92,8 +104,7 @@ defmodule Agentic.Loop.Stages.ACPExecutor do
   # --- Message formatting ---
 
   defp format_messages_for_acp(ctx) do
-    ctx.messages
-    |> Enum.reject(fn
+    Enum.reject(ctx.messages, fn
       %{"role" => "system"} -> true
       _ -> false
     end)

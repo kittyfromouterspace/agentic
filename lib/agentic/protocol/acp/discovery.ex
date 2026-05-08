@@ -16,6 +16,8 @@ defmodule Agentic.Protocol.ACP.Discovery do
   4. `:discover_callback` in acp config (programmatic)
   """
 
+  alias Agentic.Protocol.ACP
+
   require Logger
 
   @table :agentic_acp_discovery
@@ -77,6 +79,9 @@ defmodule Agentic.Protocol.ACP.Discovery do
       display: "Claude Code",
       aliases: [:claude_code],
       cache_dirs: ["~/.claude/projects"],
+      skill_path: "~/.claude/skills",
+      memory_path: "~/.claude/memory",
+      memory_file: "~/.claude/memory/MEMORY.md",
       directories: %{
         linux: %{config: ["~/.claude"], logs: ["~/.claude/logs"], cache: ["~/.claude/projects"]},
         macos: %{
@@ -99,6 +104,8 @@ defmodule Agentic.Protocol.ACP.Discovery do
       display: "Codex CLI",
       aliases: [],
       cache_dirs: ["~/.codex"],
+      skill_path: "~/.codex/skills",
+      memory_path: "~/.codex/memory",
       directories: %{
         linux: %{config: ["~/.codex"], logs: ["~/.codex/logs"], cache: ["~/.codex/cache"]},
         macos: %{
@@ -178,6 +185,8 @@ defmodule Agentic.Protocol.ACP.Discovery do
       display: "OpenCode",
       aliases: [],
       cache_dirs: ["~/.local/share/opencode"],
+      skill_path: "~/.opencode/skills",
+      memory_path: "~/.opencode/memory",
       directories: %{
         linux: %{
           config: ["~/.config/opencode"],
@@ -389,8 +398,7 @@ defmodule Agentic.Protocol.ACP.Discovery do
       end)
 
     extra =
-      configured
-      |> Enum.filter(fn entry -> probe_command(entry.command) end)
+      Enum.filter(configured, fn entry -> probe_command(entry.command) end)
 
     discovered = built_in ++ extra
 
@@ -409,20 +417,19 @@ defmodule Agentic.Protocol.ACP.Discovery do
 
       if not registered?(name) do
         try do
-          Agentic.Protocol.Registry.register(name, Agentic.Protocol.ACP)
+          Agentic.Protocol.Registry.register(name, ACP)
           Logger.debug("ACP agent discovered and registered: #{entry.display}")
         rescue
           _ -> :ok
         end
       end
 
-      entry.aliases
-      |> Enum.each(fn alias_name ->
+      Enum.each(entry.aliases, fn alias_name ->
         alias_key = {:acp, alias_name}
 
         if not registered?(alias_key) do
           try do
-            Agentic.Protocol.Registry.register(alias_key, Agentic.Protocol.ACP)
+            Agentic.Protocol.Registry.register(alias_key, ACP)
           rescue
             _ -> :ok
           end
@@ -523,7 +530,7 @@ defmodule Agentic.Protocol.ACP.Discovery do
             %{
               name: String.to_atom(name),
               command: name,
-              args: if(rest != [], do: String.split(hd(rest), ~r/\s+/), else: ["acp"]),
+              args: if(rest == [], do: ["acp"], else: String.split(hd(rest), ~r/\s+/)),
               display: name,
               aliases: [],
               cache_dirs: [],
@@ -536,7 +543,8 @@ defmodule Agentic.Protocol.ACP.Discovery do
           end)
       end
 
-    Enum.map(app_config ++ env_config, fn
+    (app_config ++ env_config)
+    |> Enum.map(fn
       entry when is_map(entry) ->
         dirs =
           entry[:directories] || entry["directories"] ||
@@ -598,7 +606,7 @@ defmodule Agentic.Protocol.ACP.Discovery do
       [var, suffix] ->
         value = System.get_env(var) || ""
         expanded = value <> suffix
-        if expanded != "", do: [expanded], else: []
+        if expanded == "", do: [], else: [expanded]
 
       _ ->
         []
@@ -607,6 +615,6 @@ defmodule Agentic.Protocol.ACP.Discovery do
 
   defp expand_env_vars(path) do
     expanded = Path.expand(path)
-    if expanded != "", do: [expanded], else: []
+    if expanded == "", do: [], else: [expanded]
   end
 end

@@ -455,11 +455,20 @@ defmodule Agentic.LLM.SpendTracker do
   defp build_filters(opts) do
     {clauses, args} =
       Enum.reduce(opts, {[], []}, fn
-        {:provider, p}, {cs, as} -> {["provider = ?" | cs], [provider_str(p) | as]}
-        {:canonical, c}, {cs, as} -> {["canonical_id = ?" | cs], [c | as]}
-        {:period, p}, {cs, as} -> {["period = ?" | cs], [Atom.to_string(p) | as]}
-        {:since, %DateTime{} = dt}, {cs, as} -> {["period_start >= ?" | cs], [DateTime.to_iso8601(dt) | as]}
-        _, acc -> acc
+        {:provider, p}, {cs, as} ->
+          {["provider = ?" | cs], [provider_str(p) | as]}
+
+        {:canonical, c}, {cs, as} ->
+          {["canonical_id = ?" | cs], [c | as]}
+
+        {:period, p}, {cs, as} ->
+          {["period = ?" | cs], [Atom.to_string(p) | as]}
+
+        {:since, %DateTime{} = dt}, {cs, as} ->
+          {["period_start >= ?" | cs], [DateTime.to_iso8601(dt) | as]}
+
+        _, acc ->
+          acc
       end)
 
     {Enum.join(clauses, " AND "), Enum.reverse(args)}

@@ -62,9 +62,7 @@ defmodule Agentic.LLM.Provider.OpenRouterTest do
 
     test "free conversational models still earn a tier hint but are tagged :free" do
       m =
-        OpenRouter.__parse_model__(
-          raw(%{"pricing" => %{"prompt" => "0", "completion" => "0"}})
-        )
+        OpenRouter.__parse_model__(raw(%{"pricing" => %{"prompt" => "0", "completion" => "0"}}))
 
       assert MapSet.member?(m.capabilities, :free)
       assert MapSet.member?(m.capabilities, :chat)
@@ -162,9 +160,7 @@ defmodule Agentic.LLM.Provider.OpenRouterTest do
   describe "parse_model/1 — reasoning + free flags" do
     test "reasoning is preserved on chat models" do
       m =
-        OpenRouter.__parse_model__(
-          raw(%{"supported_parameters" => ["tools", "reasoning"]})
-        )
+        OpenRouter.__parse_model__(raw(%{"supported_parameters" => ["tools", "reasoning"]}))
 
       assert MapSet.member?(m.capabilities, :reasoning)
     end

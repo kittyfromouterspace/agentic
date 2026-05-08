@@ -71,9 +71,8 @@ defmodule Agentic.Protocol.OpenCode do
 
   @impl true
   def format_session_arg(session_id, config) do
-    case config[:session_arg] || "--session-id" do
-      arg -> [arg, session_id]
-    end
+    arg = config[:session_arg] || "--session-id"
+    [arg, session_id]
   end
 
   @impl true
@@ -100,8 +99,6 @@ defmodule Agentic.Protocol.OpenCode do
     if should_send do
       arg = config[:system_prompt_arg] || "--system-prompt"
       [arg, system_prompt]
-    else
-      nil
     end
   end
 
@@ -137,6 +134,13 @@ defmodule Agentic.Protocol.OpenCode do
     allowed_roots = ctx.metadata[:allowed_roots] || [workspace]
     agent_dirs = allowed_roots -- [workspace]
 
+    # Add AgentFS bind mounts if present
+    agent_dirs =
+      case ctx.metadata[:agent_fs_bind_mounts] do
+        nil -> agent_dirs
+        mounts -> agent_dirs ++ mounts
+      end
+
     {exe, args, extra_env} =
       Runner.wrap_executable(
         :os.find_executable(to_charlist(config[:command])) || config[:command],
@@ -146,7 +150,8 @@ defmodule Agentic.Protocol.OpenCode do
       )
 
     env =
-      merge_env(config, config[:env] || %{})
+      config
+      |> merge_env(config[:env] || %{})
       |> Enum.map(fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end)
 
     port =
@@ -156,7 +161,8 @@ defmodule Agentic.Protocol.OpenCode do
       )
 
     session_id =
-      :crypto.strong_rand_bytes(16)
+      16
+      |> :crypto.strong_rand_bytes()
       |> :binary.bin_to_list()
       |> Enum.map_join(&Integer.to_string(&1, 16))
 

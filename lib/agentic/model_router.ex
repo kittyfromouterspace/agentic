@@ -536,7 +536,13 @@ defmodule Agentic.ModelRouter do
 
   # ----- route resolution via Catalog (manual mode) -----
 
-  defp routes_for_tier(tier, state, accounts \\ nil, pathway_preferences \\ %{}, preference \\ :optimize_price) do
+  defp routes_for_tier(
+         tier,
+         state,
+         accounts \\ nil,
+         pathway_preferences \\ %{},
+         preference \\ :optimize_price
+       ) do
     effective_tier = if tier == :any, do: nil, else: tier
 
     catalog_models =
@@ -641,7 +647,13 @@ defmodule Agentic.ModelRouter do
     model_to_route(m, account, canonical, pathway_score, [{m, account, pathway_score}])
   end
 
-  defp model_to_route(%Model{} = m, %ProviderAccount{} = account, canonical, pathway_score, pathways) do
+  defp model_to_route(
+         %Model{} = m,
+         %ProviderAccount{} = account,
+         canonical,
+         pathway_score,
+         pathways
+       ) do
     health = lookup_health(m.id)
     status = if route_healthy_record?(health), do: :healthy, else: :unhealthy
 
@@ -945,7 +957,9 @@ defmodule Agentic.ModelRouter do
       |> Map.new()
 
     case Jason.encode(serialisable) do
-      {:ok, json} -> File.write(@sticky_path, json)
+      {:ok, json} ->
+        File.write(@sticky_path, json)
+
       {:error, reason} ->
         Logger.warning("ModelRouter: failed to encode sticky snapshot: #{inspect(reason)}")
     end
@@ -1018,7 +1032,9 @@ defmodule Agentic.ModelRouter do
         :ets.insert(@health_table, {model_id, normalise_health(raw)})
       end)
 
-      Logger.debug("ModelRouter: loaded health for #{map_size(decoded)} routes from #{@health_path}")
+      Logger.debug(
+        "ModelRouter: loaded health for #{map_size(decoded)} routes from #{@health_path}"
+      )
     else
       {:error, :enoent} ->
         :ok

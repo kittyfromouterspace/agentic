@@ -8,9 +8,10 @@ defmodule Agentic.Loop.Stages.CLIExecutor do
   This stage replaces LLMCall for local agent profiles (claude_code, opencode).
   """
 
-  alias Agentic.Protocol.Registry
-
   @behaviour Agentic.Loop.Stage
+
+  alias Agentic.Loop.Profile
+  alias Agentic.Protocol.Registry
 
   @impl true
   def call(ctx, next) do
@@ -20,7 +21,7 @@ defmodule Agentic.Loop.Stages.CLIExecutor do
     ctx = ensure_session(ctx, protocol)
 
     # Get profile config for CLI settings
-    profile_config = Agentic.Loop.Profile.config(ctx.profile || :agentic)
+    profile_config = Profile.config(ctx.profile || :agentic)
 
     # Format messages for the CLI protocol
     messages = format_messages_for_cli(ctx, profile_config)
@@ -55,7 +56,7 @@ defmodule Agentic.Loop.Stages.CLIExecutor do
       ctx.protocol_module
     else
       profile = ctx.profile || :agentic
-      profile_config = Agentic.Loop.Profile.config(profile)
+      profile_config = Profile.config(profile)
       protocol_name = profile_config[:protocol] || :llm
 
       case Registry.lookup(protocol_name) do
@@ -69,12 +70,19 @@ defmodule Agentic.Loop.Stages.CLIExecutor do
 
   defp ensure_session(ctx, protocol) do
     profile = ctx.profile || :agentic
-    profile_config = Agentic.Loop.Profile.config(profile)
+    profile_config = Profile.config(profile)
 
     # If we already have a protocol session, we're good
     if ctx.protocol_session_id do
       ctx
     else
+      # Mount AgentFS overlay before starting the session
+      {overlay_path, ctx} =
+        case Agentic.AgentFS.mount(ctx) do
+          :noop -> {nil, ctx}
+          {path, updated_ctx} -> {path, updated_ctx}
+        end
+
       # Start new session
       backend_config =
         Map.merge(
@@ -93,6 +101,8 @@ defmodule Agentic.Loop.Stages.CLIExecutor do
           }
 
         {:error, reason} ->
+          # Unmount on failure
+          if overlay_path, do: Agentic.AgentFS.unmount(ctx), else: :ok
           raise "Failed to start CLI session: #{inspect(reason)}"
       end
     end

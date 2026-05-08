@@ -10,9 +10,9 @@ defmodule Agentic.Sandbox.Runner do
   - `wrap_executable/3` — for executable + argument list (e.g. coding agents)
   """
 
-  require Logger
-
   alias Agentic.Sandbox.Platform
+
+  require Logger
 
   @doc """
   Wraps a shell command string in the platform-appropriate sandbox.
@@ -182,7 +182,7 @@ defmodule Agentic.Sandbox.Runner do
       {:unix, :linux} ->
         # Prefer a bundled static binary in the OTP release priv dir
         priv = Application.app_dir(:agentic, "priv/bin/bwrap")
-        if File.exists?(priv), do: priv, else: nil
+        if File.exists?(priv), do: priv
 
       _ ->
         nil
@@ -190,7 +190,7 @@ defmodule Agentic.Sandbox.Runner do
   end
 
   defp bwrap_args(workspace, agent_dirs, opts) do
-    bwrap_args_list(workspace, agent_dirs, opts) |> Enum.map_join(" ", &shell_escape/1)
+    workspace |> bwrap_args_list(agent_dirs, opts) |> Enum.map_join(" ", &shell_escape/1)
   end
 
   defp bwrap_args_list(workspace, agent_dirs, opts) do
@@ -250,9 +250,14 @@ defmodule Agentic.Sandbox.Runner do
 
     # Agent private dirs (config/cache/logs) are bound at their original
     # host paths so the CLI's own `$HOME/...` lookups resolve correctly.
+    #
+    # Supports both plain strings (bind at same path) and {host, container}
+    # tuples for custom mount points (e.g. AgentFS overlays).
     agent_binds =
-      agent_dirs
-      |> Enum.flat_map(fn dir -> bind_args(dir, dir, :rw) end)
+      Enum.flat_map(agent_dirs, fn
+        {host_path, container_path} -> bind_args(host_path, container_path, :rw)
+        dir when is_binary(dir) -> bind_args(dir, dir, :rw)
+      end)
 
     base ++ agent_binds
   end
@@ -275,7 +280,8 @@ defmodule Agentic.Sandbox.Runner do
     dirs_wsl = Enum.map(agent_dirs, &windows_to_wsl_path/1)
 
     args =
-      bwrap_args_list(ws_wsl, dirs_wsl, network: :block)
+      ws_wsl
+      |> bwrap_args_list(dirs_wsl, network: :block)
       |> Enum.map_join(" ", &shell_escape/1)
 
     "wsl.exe -- bwrap #{args} --chdir /workspace -- /bin/sh -c #{shell_escape(command)}"

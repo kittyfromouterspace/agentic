@@ -68,8 +68,7 @@ defmodule Agentic.Protocol.Codex do
   def format_session_arg(_session_id, _config), do: []
 
   @impl true
-  def extract_session_id(response, _config),
-    do: response["thread_id"] || response[:session_id]
+  def extract_session_id(response, _config), do: response["thread_id"] || response[:session_id]
 
   @impl true
   def format_system_prompt(system_prompt, _is_first, _config) do
@@ -187,6 +186,13 @@ defmodule Agentic.Protocol.Codex do
     allowed_roots = metadata[:allowed_roots] || [workspace]
     agent_dirs = allowed_roots -- [workspace]
 
+    # Add AgentFS bind mounts if present
+    agent_dirs =
+      case metadata[:agent_fs_bind_mounts] do
+        nil -> agent_dirs
+        mounts -> agent_dirs ++ mounts
+      end
+
     executable =
       :os.find_executable(to_charlist(config[:command])) || config[:command]
 
@@ -210,7 +216,8 @@ defmodule Agentic.Protocol.Codex do
       |> Kernel.<>(" < /dev/null")
 
     env =
-      merge_env(config, config[:env] || %{})
+      config
+      |> merge_env(config[:env] || %{})
       |> Enum.map(fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end)
 
     port_opts = [:stream, :binary, :exit_status, :stderr_to_stdout, {:args, ["-c", shell_cmd]}]
@@ -303,15 +310,13 @@ defmodule Agentic.Protocol.Codex do
       |> Enum.join("\n")
 
     usage =
-      events
-      |> Enum.find_value(fn
+      Enum.find_value(events, fn
         %{"type" => "turn.completed", "usage" => u} -> u
         _ -> nil
       end) || %{}
 
     thread_id =
-      events
-      |> Enum.find_value(fn
+      Enum.find_value(events, fn
         %{"type" => "thread.started", "thread_id" => id} -> id
         _ -> nil
       end)
@@ -370,7 +375,8 @@ defmodule Agentic.Protocol.Codex do
   # --- Session state ---
 
   defp generate_session_id do
-    :crypto.strong_rand_bytes(16)
+    16
+    |> :crypto.strong_rand_bytes()
     |> :binary.bin_to_list()
     |> Enum.map_join(&Integer.to_string(&1, 16))
   end

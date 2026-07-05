@@ -181,12 +181,26 @@ defmodule Agentic.LLM.Transport.Ollama do
 
   defp transform_tools(_), do: []
 
+  # Ollama takes generation controls under `options`. Map the canonical
+  # params through: `max_tokens` -> `num_predict` (output cap — otherwise
+  # ignored), plus temperature and an optional `options` passthrough for
+  # anything Ollama-specific (num_ctx, num_thread, …).
   defp build_options(params) do
-    case Map.get(params, :temperature) do
-      nil -> nil
-      t -> %{temperature: t}
+    %{}
+    |> maybe_opt(:temperature, Map.get(params, :temperature))
+    |> maybe_opt(:num_predict, Map.get(params, :max_tokens))
+    |> merge_passthrough(Map.get(params, :options))
+    |> case do
+      opts when map_size(opts) == 0 -> nil
+      opts -> opts
     end
   end
+
+  defp maybe_opt(map, _key, nil), do: map
+  defp maybe_opt(map, key, value), do: Map.put(map, key, value)
+
+  defp merge_passthrough(map, %{} = extra), do: Map.merge(map, extra)
+  defp merge_passthrough(map, _), do: map
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)

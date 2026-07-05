@@ -89,10 +89,12 @@ defmodule Agentic.LLM.Provider do
 
         request = transport_mod.build_chat_request(canonical, transport_opts)
 
+        # Local models (Ollama on CPU) can take minutes; let callers pass a
+        # longer `:receive_timeout`. Default 120s.
         case Req.post(request.url,
                json: request.body,
                headers: request.headers,
-               receive_timeout: 120_000
+               receive_timeout: Keyword.get(opts, :receive_timeout, 120_000)
              ) do
           {:ok, %{status: status, body: resp_body, headers: resp_headers}} ->
             transport_mod.parse_chat_response(status, resp_body, resp_headers)

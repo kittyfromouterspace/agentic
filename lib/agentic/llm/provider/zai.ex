@@ -11,10 +11,13 @@ defmodule Agentic.LLM.Provider.Zai do
     * Global (USD billing): `https://api.z.ai/api/paas/v4/`
     * China (CNY billing): `https://open.bigmodel.cn/api/paas/v4/`
     * Coding-Plan keys: `https://api.z.ai/api/coding/paas/v4/`
+      (China coding: `https://open.bigmodel.cn/api/coding/paas/v4/`)
 
-  We default to the global endpoint. Hosts that need the Coding-Plan
-  variant should override `default_base_url` via the user-config
-  override path.
+  We default to the global pay-as-you-go endpoint. **Coding-plan
+  subscribers** must point at the coding endpoint by setting
+  `ZAI_BASE_URL=https://api.z.ai/api/coding/paas/v4`. On the coding plan
+  the GLM-5 family (glm-5.2, glm-5.1, glm-5-turbo, glm-5v-turbo) is
+  served under a flat subscription, so per-token costs there are zero.
 
   z.ai exposes **no `/models` endpoint** and **no balance/quota endpoint**;
   the model list is static and per-account quotas are dashboard-only at
@@ -44,7 +47,9 @@ defmodule Agentic.LLM.Provider.Zai do
   def transport, do: Agentic.LLM.Transport.OpenAIChatCompletions
 
   @impl true
-  def default_base_url, do: "https://api.z.ai/api/paas/v4"
+  def default_base_url do
+    System.get_env("ZAI_BASE_URL", "https://api.z.ai/api/paas/v4")
+  end
 
   @impl true
   def env_vars, do: ["ZAI_API_KEY", "Z_AI_API_KEY"]
@@ -111,6 +116,50 @@ defmodule Agentic.LLM.Provider.Zai do
         cost: %{input: 0.13, output: 0.85},
         capabilities: MapSet.new([:chat, :tools]),
         tier_hint: :lightweight,
+        source: :static
+      },
+      %Model{
+        id: "glm-5.2",
+        provider: :zai,
+        label: "GLM-5.2",
+        context_window: 1_000_000,
+        max_output_tokens: 131_072,
+        cost: %{input: 0.0, output: 0.0},
+        capabilities: MapSet.new([:chat, :tools, :reasoning]),
+        tier_hint: :primary,
+        source: :static
+      },
+      %Model{
+        id: "glm-5.1",
+        provider: :zai,
+        label: "GLM-5.1",
+        context_window: 200_000,
+        max_output_tokens: 131_072,
+        cost: %{input: 0.0, output: 0.0},
+        capabilities: MapSet.new([:chat, :tools, :reasoning]),
+        tier_hint: :primary,
+        source: :static
+      },
+      %Model{
+        id: "glm-5-turbo",
+        provider: :zai,
+        label: "GLM-5 Turbo",
+        context_window: 200_000,
+        max_output_tokens: 131_072,
+        cost: %{input: 0.0, output: 0.0},
+        capabilities: MapSet.new([:chat, :tools, :reasoning]),
+        tier_hint: :primary,
+        source: :static
+      },
+      %Model{
+        id: "glm-5v-turbo",
+        provider: :zai,
+        label: "GLM-5V Turbo",
+        context_window: 200_000,
+        max_output_tokens: 131_072,
+        cost: %{input: 0.0, output: 0.0},
+        capabilities: MapSet.new([:chat, :tools, :vision, :reasoning]),
+        tier_hint: :primary,
         source: :static
       }
     ]

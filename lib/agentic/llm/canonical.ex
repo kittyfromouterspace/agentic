@@ -62,6 +62,8 @@ defmodule Agentic.LLM.Canonical do
     {:zai, "glm-5"} => "glm-5",
     {:zai, "glm-5.1"} => "glm-5.1",
     {:zai, "glm-5-turbo"} => "glm-5-turbo",
+    {:zai, "glm-5.2"} => "glm-5.2",
+    {:zai, "glm-5v-turbo"} => "glm-5v-turbo",
 
     # Gemini CLI — Google models served via the gemini binary.
     {:gemini, "google/gemini-3-pro"} => "gemini-3-pro",
@@ -70,6 +72,20 @@ defmodule Agentic.LLM.Canonical do
     # Kimi Code — Moonshot K2 family.
     {:kimi, "moonshot/k2"} => "moonshot-k2",
     {:kimi, "moonshot/k2-thinking"} => "moonshot-k2-thinking",
+
+    # Moonshot direct API (OpenAI-compatible) — same K2 weights.
+    {:moonshot, "kimi-k2.7-code"} => "kimi-k2.7-code",
+    {:moonshot, "kimi-k2.7-code-highspeed"} => "kimi-k2.7-code",
+    {:moonshot, "kimi-k2.6"} => "kimi-k2.6",
+    {:moonshot, "kimi-k2.5"} => "kimi-k2.5",
+    {:moonshot, "kimi-k2-thinking"} => "kimi-k2-thinking",
+
+    # Kimi For Coding (Anthropic-compatible coding plan) — same weights,
+    # reached via the coding gateway. Aliases collapse onto the coding
+    # canonical so the router can pick the cheapest configured pathway.
+    {:kimi_coding, "kimi-for-coding"} => "kimi-k2.7-code",
+    {:kimi_coding, "k2p7"} => "kimi-k2.7-code",
+    {:kimi_coding, "kimi-k2-thinking"} => "kimi-k2-thinking",
 
     # Qwen Code — Alibaba Qwen family.
     {:qwen, "alibaba/qwen3-coder"} => "qwen3-coder",

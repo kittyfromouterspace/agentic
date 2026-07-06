@@ -33,6 +33,8 @@ defmodule Agentic.LLM.Transport.Ollama do
       }
       |> maybe_put(:tools, if(tools == [], do: nil, else: tools))
       |> maybe_put(:options, build_options(params))
+      # `think: false` disables reasoning-model chain-of-thought.
+      |> maybe_put(:think, Map.get(params, :think))
 
     headers = [{"content-type", "application/json"}] ++ extra_headers
 

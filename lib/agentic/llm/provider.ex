@@ -390,6 +390,9 @@ defmodule Agentic.LLM.Provider do
       tools: get(params, "tools", :tools, []) || [],
       max_tokens: get(params, "max_tokens", :max_tokens, nil),
       temperature: get(params, "temperature", :temperature, nil),
+      # Ollama reasoning models (Gemma, Qwen-thinking) emit a chain-of-
+      # thought unless `think: false`. Only the Ollama transport uses it.
+      think: get(params, "think", :think, nil),
       tool_choice: get(params, "tool_choice", :tool_choice, nil),
       cache_control: normalize_cache_control(get(params, "cache_control", :cache_control, nil)),
       preference: Keyword.get(opts, :preference)

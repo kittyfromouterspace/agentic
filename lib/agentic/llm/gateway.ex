@@ -138,7 +138,7 @@ defmodule Agentic.LLM.Gateway do
         case Req.post(request.url,
                json: request.body,
                headers: request.headers,
-               receive_timeout: 120_000
+               receive_timeout: Agentic.LLM.Timeout.receive_timeout()
              ) do
           {:ok, %{status: status, body: resp_body, headers: resp_headers}} ->
             duration = System.monotonic_time() - start_time
@@ -200,7 +200,7 @@ defmodule Agentic.LLM.Gateway do
                url: request.url,
                json: req_body,
                headers: request.headers,
-               receive_timeout: 120_000,
+               receive_timeout: Agentic.LLM.Timeout.receive_timeout(),
                into: :self
              ) do
           {:ok, %{status: 200, body: %Req.Response.Async{} = async_body, headers: resp_headers}} ->
@@ -409,6 +409,11 @@ defmodule Agentic.LLM.Gateway do
   end
 
   defp emit_gateway_stop(call_id, provider_id, status, duration, usage, raw_response) do
+    # Feed every attempt's wall time to the adaptive timeout so it self-tunes to
+    # the provider's real latency (a run of :timeouts ratchets it up; fast calls
+    # let it settle). Native → ms; the tracker guards non-positive values.
+    Agentic.LLM.Timeout.observe(System.convert_time_unit(duration, :native, :millisecond))
+
     {actual_cost, estimated_cost} = extract_costs(provider_id, raw_response, usage)
 
     Agentic.Telemetry.event(

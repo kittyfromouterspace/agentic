@@ -14,6 +14,7 @@ defmodule Agentic.Application do
       Agentic.LLM.Catalog,
       Agentic.LLM.SpendTracker,
       Agentic.LLM.UsageManager,
+      Agentic.LLM.Timeout,
       Agentic.ModelRouter,
       Agentic.Protocol.Registry,
       Agentic.Strategy.Registry,

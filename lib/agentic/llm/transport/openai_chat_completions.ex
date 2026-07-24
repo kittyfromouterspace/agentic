@@ -94,7 +94,10 @@ defmodule Agentic.LLM.Transport.OpenAIChatCompletions do
         input_tokens: get_in(body, ["usage", "prompt_tokens"]) || 0,
         output_tokens: get_in(body, ["usage", "completion_tokens"]) || 0,
         cache_read: 0,
-        cache_write: 0
+        cache_write: 0,
+        # Provider-reported cost (OpenRouter includes this when asked via
+        # `usage: {include: true}`); nil for providers that don't report it.
+        cost: get_in(body, ["usage", "cost"])
       },
       model_id: body["model"],
       raw: body

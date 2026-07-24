@@ -77,7 +77,11 @@ defmodule Agentic.LLM.Provider.OpenRouter do
 
     provider = if sort, do: Map.put(provider, "sort", sort), else: provider
 
-    %{"provider" => provider}
+    # Ask OpenRouter to report the real per-request cost in the response's
+    # `usage` object (`usage.cost`, USD). Essential for the `auto-beta` router,
+    # whose backing model — and therefore price — varies call to call, so it
+    # cannot be derived from a static price table.
+    %{"provider" => provider, "usage" => %{"include" => true}}
   end
 
   @impl true

@@ -83,6 +83,7 @@ This library is consumed as a git dependency by Worth. When adding new functiona
 
 | Version | Git Tag | Notes |
 |---------|---------|-------|
+| 0.3.1   | `v0.3.1` | Fix protocol registry ordering, optional callbacks, real-CLI opencode protocol |
 | 0.2.1   | `v0.2.1` | Docs cleanup, bug fixes, recollect 0.5 bump |
 | 0.2.0   | `v0.2.0` | Multi-mode loop, strategies, subagents, protocols, model router |
 | 0.1.9   | `v0.1.9` | LLM gateway proxy, ACP streaming, codex profile |

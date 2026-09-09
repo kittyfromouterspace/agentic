@@ -27,10 +27,14 @@ defmodule Agentic.Application do
     Agentic.CircuitBreaker.init()
     Agentic.LLM.Credentials.init_store()
 
-    # Register built-in protocols
+    {:ok, pid} = Supervisor.start_link(children, opts)
+
+    # Register built-in protocols — AFTER the supervisor start, otherwise
+    # the Registry GenServer does not exist yet and every registration
+    # (a fire-and-forget cast) is silently dropped.
     register_protocols()
 
-    Supervisor.start_link(children, opts)
+    {:ok, pid}
   end
 
   defp register_protocols do

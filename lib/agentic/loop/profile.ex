@@ -219,9 +219,10 @@ defmodule Agentic.Loop.Profile do
       transport_type: :local_agent,
       cli_config: %{
         command: "opencode",
-        args: ["--mode", "agent"],
+        args: ["run", "--format", "json"],
         session_mode: :always,
-        session_id_fields: ["session_id"]
+        session_id_fields: ["sessionID"],
+        system_prompt_mode: :replace
       },
       session_cost_limit_usd: 5.0,
       session_duration_limit_ms: 600_000

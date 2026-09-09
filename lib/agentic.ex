@@ -55,7 +55,7 @@ defmodule Agentic do
 
   - `:prompt` — user prompt (required)
   - `:workspace` — workspace directory path (required)
-  - `:callbacks` — map of callback functions (required, at minimum `:llm_chat`)
+  - `:callbacks` — map of callback functions (optional for CLI profiles via CLIExecutor; `:llm_chat` is required for LLM-driven profiles)
   - `:system_prompt` — custom system prompt (optional, auto-assembled if omitted)
   - `:history` — list of prior conversation messages (optional)
   - `:profile` — loop profile (optional, default `:agentic`)
@@ -139,7 +139,10 @@ defmodule Agentic do
   defp run_single(opts) do
     prompt = Keyword.fetch!(opts, :prompt)
     workspace = Keyword.fetch!(opts, :workspace)
-    callbacks = Keyword.fetch!(opts, :callbacks)
+
+    # CLI profiles drive the binary via CLIExecutor and don't need LLM
+    # callbacks; default to an empty map instead of raising.
+    callbacks = Keyword.get(opts, :callbacks, %{})
     history = Keyword.get(opts, :history, [])
     mode = Keyword.get(opts, :mode, :agentic)
     profile_name = Keyword.get_lazy(opts, :profile, fn -> mode end)
@@ -292,14 +295,14 @@ defmodule Agentic do
 
   - `:session_id` — session to resume (required)
   - `:workspace` — workspace directory path (required)
-  - `:callbacks` — map of callback functions (required, at minimum `:llm_chat`)
+  - `:callbacks` — map of callback functions (optional for CLI profiles via CLIExecutor; `:llm_chat` is required for LLM-driven profiles)
   - `:transcript_backend` — module implementing `Agentic.Persistence.Transcript` (optional, defaults to `Transcript.Local`)
   - All other options from `run/1` are supported and override transcript values.
   """
   def resume(opts) do
     session_id = Keyword.fetch!(opts, :session_id)
     workspace = Keyword.fetch!(opts, :workspace)
-    callbacks = Keyword.fetch!(opts, :callbacks)
+    callbacks = Keyword.get(opts, :callbacks, %{})
     backend = Keyword.get(opts, :transcript_backend, Agentic.Persistence.Transcript.Local)
 
     case backend.load(session_id, workspace: workspace) do

@@ -89,6 +89,10 @@ defmodule Agentic.CLI.Transcript do
       |> Enum.take(1)
       |> Enum.map_join(", ", fn {k, v} -> "#{k}: #{short_value(v)}" end)
 
+    # opencode's state.title often echoes the tool name — keep it only when
+    # it adds information.
+    title = if title == name, do: "", else: title
+
     [name, hint, title, status]
     |> Enum.reject(&(&1 == ""))
     |> Enum.join(" — ")

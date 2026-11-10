@@ -136,6 +136,13 @@ defmodule Agentic.CLI.StreamSession do
   def list_models(:claude_code), do: Protocol.ClaudeCode.list_models()
   def list_models(:opencode), do: Protocol.OpenCode.list_models()
 
+  @doc """
+  `Protocol.OpenCode.list_models_grouped/0` — models grouped by provider
+  (authenticated subscriptions first) for optgroup-style pickers.
+  """
+  @spec list_models_grouped(:opencode) :: [{String.t(), [String.t()]}]
+  def list_models_grouped(:opencode), do: Protocol.OpenCode.list_models_grouped()
+
   # ── Internals ───────────────────────────────────────────────────────────
 
   defp state_key(session_id), do: {__MODULE__, session_id}

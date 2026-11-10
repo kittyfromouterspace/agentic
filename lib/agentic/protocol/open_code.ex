@@ -89,6 +89,34 @@ defmodule Agentic.Protocol.OpenCode do
     end
   end
 
+  @doc """
+  `list_models/0` grouped by provider, preserving first-appearance order
+  (authenticated providers first, see `authenticated_providers/0`).
+
+  Returns `[{provider, [model_id, ...]}, ...]` — the shape UI pickers render
+  as optgroups so every configured subscription is discoverable, not just
+  whichever provider sorts first.
+  """
+  def list_models_grouped do
+    models = list_models()
+
+    providers =
+      models
+      |> Enum.map(&model_provider/1)
+      |> Enum.uniq()
+
+    Enum.map(providers, fn provider ->
+      {provider, Enum.filter(models, &(model_provider(&1) == provider))}
+    end)
+  end
+
+  defp model_provider(model) do
+    case String.split(model, "/", parts: 2) do
+      [provider | _] -> provider
+      _ -> model
+    end
+  end
+
   @model_cache_ttl 15 * 60 * 1000
 
   defp cached?(_models, nil), do: false
@@ -106,16 +134,71 @@ defmodule Agentic.Protocol.OpenCode do
       exe ->
         case System.cmd(List.to_string(exe), ["models"], stderr_to_stdout: true) do
           {out, 0} ->
-            out
-            |> String.split("\n")
-            |> Enum.map(&String.trim/1)
-            |> Enum.reject(&(&1 == "" or String.contains?(&1, " ") or !String.contains?(&1, "/")))
-            |> Enum.uniq()
+            models =
+              out
+              |> String.split("\n")
+              |> Enum.map(&String.trim/1)
+              |> Enum.reject(
+                &(&1 == "" or String.contains?(&1, " ") or !String.contains?(&1, "/"))
+              )
+              |> Enum.uniq()
+
+            # The CLI dumps every installed provider plugin (hundreds of
+            # entries); the harness's own authenticated providers are what
+            # users actually pick from. Order those first so pickers show
+            # the subscriptions, while the rest stays type-ahead reachable.
+            {first, rest} = split_by_authenticated_providers(models)
+            first ++ rest
 
           _ ->
             []
         end
     end
+  end
+
+  @auth_paths [
+    "~/.local/share/opencode/auth.json",
+    "~/.config/opencode/auth.json"
+  ]
+
+  @doc """
+  Provider ids the local opencode CLI is authenticated with, from its
+  `auth.json` (checked in the usual locations). These are the user's actual
+  subscriptions; `list_models/0` uses them to order the catalog.
+  """
+  def authenticated_providers do
+    Enum.find_value(@auth_paths, fn path ->
+      case File.read(Path.expand(path)) do
+        {:ok, content} ->
+          case Jason.decode(content) do
+            {:ok, %{} = map} ->
+              map
+              |> Map.keys()
+              |> Enum.reject(&(&1 in ["key", "type"]))
+              |> Enum.map(&to_string/1)
+              |> Enum.sort()
+
+            _ ->
+              nil
+          end
+
+        _ ->
+          nil
+      end
+    end) || []
+  rescue
+    _e -> []
+  end
+
+  defp split_by_authenticated_providers(models) do
+    authed = MapSet.new(authenticated_providers())
+
+    Enum.split_with(models, fn model ->
+      model
+      |> String.split("/", parts: 2)
+      |> List.first()
+      |> then(&MapSet.member?(authed, &1))
+    end)
   end
 
   @doc """

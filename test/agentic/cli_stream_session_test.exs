@@ -39,8 +39,8 @@ defmodule Agentic.CLI.StreamSessionTest do
       assert result != []
 
       assert result
-             |> Enum.any?(&String.contains?(&1, "claude"))
-             or Enum.any?(result, &(&1 in ["sonnet", "opus", "haiku"]))
+             |> Enum.any?(&String.contains?(&1, "claude")) or
+               Enum.any?(result, &(&1 in ["sonnet", "opus", "haiku"]))
     end
   end
 end

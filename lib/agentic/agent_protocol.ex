@@ -220,6 +220,19 @@ defmodule Agentic.AgentProtocol do
   @callback stream_message(session_id, chunk :: map(), context :: Context.t()) :: :ok
   def stream_message(_, _, _), do: :ok
 
+  @doc """
+  Model ids this CLI accepts for its model argument (`--model <id>`).
+
+  Sources vary per protocol: some read the installed CLI's model listing,
+  others derive from the canonical catalog. Home/UI layers call this from
+  their model pickers instead of hand-maintaining lists.
+
+  Default: empty list (covered by the default implemented in most protocols
+  through `list_models/0` fallback: `available?/0`-gated CLI diagnostics).
+  """
+  @callback list_models() :: [String.t()]
+  def list_models, do: []
+
   # --- Default implementations ---
 
   defmacro __using__(_opts) do
@@ -229,11 +242,13 @@ defmodule Agentic.AgentProtocol do
       def estimate_cost(_), do: 0.0
       def get_usage(_), do: nil
       def available?, do: true
+      def list_models, do: []
       def stream_message(_, _, _), do: :ok
 
       defoverridable estimate_cost: 1,
                      get_usage: 1,
                      available?: 0,
+                     list_models: 0,
                      stream_message: 3
     end
   end

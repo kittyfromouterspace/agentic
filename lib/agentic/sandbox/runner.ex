@@ -106,7 +106,7 @@ defmodule Agentic.Sandbox.Runner do
       |> Enum.uniq()
       |> Enum.reject(&bwrap_base_bound?/1)
 
-    (parents ++ tool_manager_roots)
+    (parents ++ tool_manager_roots ++ script_bind_roots(executable))
     |> Enum.uniq()
     |> Enum.flat_map(fn dir -> ["--ro-bind-try", dir, dir] end)
   end
@@ -115,6 +115,67 @@ defmodule Agentic.Sandbox.Runner do
     do: executable_bind_args(List.to_string(executable))
 
   defp executable_bind_args(_), do: []
+
+  @doc """
+  Extra sandbox-bind roots required by *script shims*, scanned statically.
+
+  A shim like `/usr/sbin/claude` is a shebang shell script whose body execs
+  the real binary (e.g. `/opt/claude-code/bin/claude`). The symlink chain can
+  never see that target, so benchmarks installed under tool prefixes like
+  `/opt/…` vanish inside the sandbox and the CLI dies instantly with
+  "No such file or directory". We scan the script text for absolute paths and
+  return each path's first two components (e.g. `/opt/claude-code`) so the
+  caller can `--ro-bind-try` them.
+  """
+  def script_bind_roots(executable) when is_binary(executable) do
+    case read_script(executable) do
+      {:ok, content, shebang?} ->
+        if shebang? do
+          content
+          |> absolute_paths()
+          |> Enum.map(&root_two_levels/1)
+          |> Enum.reject(&bwrap_base_bound?/1)
+          |> Enum.uniq()
+        else
+          []
+        end
+
+      _ ->
+        []
+    end
+  end
+
+  # A cap keeps huge scripts from being scanned term-wise; real shims are
+  # tiny.
+  @script_scan_bytes 16_384
+
+  defp read_script(path) do
+    case File.read(path) do
+      {:ok, content} ->
+        content = String.slice(content, 0, @script_scan_bytes)
+        shebang? = String.starts_with?(content, "#!")
+        {:ok, content, shebang?}
+
+      _ ->
+        :error
+    end
+  end
+
+  # Matches absolute unix paths that appear as standalone tokens anywhere in
+  # the script (after `exec`, `node`, in variables, etc.).
+  @absolute_path_rx ~r/(?:^|[\s"'=`])(\/[A-Za-z0-9._\-]+(?:\/[A-Za-z0-9._\-]+)+)(?=$|[\s"'=`])/
+
+  defp absolute_paths(content) do
+    Regex.scan(@absolute_path_rx, content)
+    |> Enum.map(fn [_, path] -> path end)
+  end
+
+  defp root_two_levels(path) do
+    path
+    |> Path.split()
+    |> Enum.take(3)
+    |> Path.join()
+  end
 
   # Detect version-manager layouts (asdf, mise, nvm, rbenv, ...). Shims live
   # in `$ROOT/shims/` but dispatch into `$ROOT/installs/...`, so binding just

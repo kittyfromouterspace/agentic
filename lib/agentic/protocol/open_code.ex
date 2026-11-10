@@ -74,8 +74,92 @@ defmodule Agentic.Protocol.OpenCode do
   end
 
   @impl true
+  def list_models do
+    # OpenCode reads its provider catalogue from its own CLI (`opencode
+    # models` — one "provider/model" per line). Cached with a TTL since it
+    # shells out; empty on failure (callers keep their own fallback).
+    {models, cached_at} = :persistent_term.get({__MODULE__, :models}, {nil, nil})
+
+    if cached?(models, cached_at) do
+      models
+    else
+      models = fetch_model_list()
+      :persistent_term.put({__MODULE__, :models}, {models, System.system_time(:millisecond)})
+      models
+    end
+  end
+
+  @model_cache_ttl 15 * 60 * 1000
+
+  defp cached?(_models, nil), do: false
+
+  defp cached?(models, cached_at) when is_integer(cached_at) do
+    is_list(models) and
+      System.system_time(:millisecond) - cached_at < @model_cache_ttl
+  end
+
+  defp fetch_model_list do
+    case :os.find_executable(~c"opencode") do
+      false ->
+        []
+
+      exe ->
+        case System.cmd(List.to_string(exe), ["models"], stderr_to_stdout: true) do
+          {out, 0} ->
+            out
+            |> String.split("\n")
+            |> Enum.map(&String.trim/1)
+            |> Enum.reject(&(&1 == "" or String.contains?(&1, " ") or !String.contains?(&1, "/")))
+            |> Enum.uniq()
+
+          _ ->
+            []
+        end
+    end
+  end
+
+  @doc """
+  Spawn shape for of a one-shot OpenCode turn, mirroring this module's own
+  turn runner: `{/bin/sh, ["-c", script], env_list}`.
+
+  OpenCode reads stdin to EOF, so a port-held stdin pipe can never deliver
+  it — the prompt must travel via the `AGENTIC_PROMPT` env var and the shell
+  closes stdin with `</dev/null`:
+    `exec <exe> <args> $AGENTIC_PROMPT </dev/null`
+
+  The port opts the caller should use: `[:stream, :binary, :exit_status,
+  :stderr_to_stdout, {:args, args}, {:cd, workspace}, {:env, env_list}]`.
+  """
+  def turn_spawn_args(config, prompt) do
+    exe = resolve_exe(config[:command])
+
+    env_list =
+      charlist_env(config[:env] || %{}) ++
+        [{~c"AGENTIC_PROMPT", String.to_charlist(prompt)}]
+
+    script =
+      "exec " <>
+        Enum.join([exe | config[:args] || []], " ") <> ~s( "$AGENTIC_PROMPT" </dev/null)
+
+    {"/bin/sh", ["-c", script], env_list}
+  end
+
+  defp resolve_exe(command) do
+    case :os.find_executable(to_charlist(command)) do
+      path when is_list(path) -> List.to_string(path)
+      _ -> command
+    end
+  end
+
+  defp charlist_env(env) do
+    env
+    |> Enum.map(fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end)
+  end
+
+  @impl true
   def format_session_arg(session_id, config) do
     arg = config[:session_arg] || "--session"
+
     [arg, session_id]
   end
 

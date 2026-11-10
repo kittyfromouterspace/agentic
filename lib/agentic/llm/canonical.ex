@@ -200,6 +200,47 @@ defmodule Agentic.LLM.Canonical do
 
   # ----- GenServer callbacks -----
 
+  @doc """
+  All model ids for a provider known to the canonical store.
+
+  Combines the static overrides and the (potentially stale) models.dev
+  snapshot from the public ETS table; no GenServer roundtrip so it can be
+  called from hot paths and UI pickers.
+  """
+  @spec models_for(atom()) :: [String.t()]
+  def models_for(provider) when is_atom(provider) do
+    override_ids =
+      @overrides
+      |> Enum.filter(fn {{p, _id}, _canonical} -> p == provider end)
+      |> Enum.map(fn {{_p, id}, _canonical} -> id end)
+
+    catalog_ids =
+      case :ets.whereis(:agentic_canonical) do
+        :undefined ->
+          []
+
+        _tid ->
+          :ets.tab2list(:agentic_canonical)
+          |> Enum.filter(fn {{p, _id}, _canonical, _meta} -> p == provider end)
+          |> Enum.map(fn {{_p, id}, _canonical, _meta} -> id end)
+      end
+
+    override_ids ++ catalog_ids
+  end
+
+  @doc """
+  Narrow models_for/1 to one family, e.g. `grep_family(provider, "claude")`.
+  Falls back to the override-driven list, so it never returns empty just
+  because models.dev wasn't fetched yet.
+  """
+  @spec grep_models_for(atom(), String.t()) :: [String.t()]
+  def grep_models_for(provider, family) when is_atom(provider) and is_binary(family) do
+    case models_for(provider) |> Enum.filter(&String.contains?(&1, family)) do
+      [] -> []
+      filtered -> filtered
+    end
+  end
+
   @impl true
   def init(_opts) do
     :ets.new(:agentic_canonical, [:named_table, :set, :public, read_concurrency: true])

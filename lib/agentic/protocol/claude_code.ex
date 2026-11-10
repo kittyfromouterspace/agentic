@@ -103,6 +103,25 @@ defmodule Agentic.Protocol.ClaudeCode do
   end
 
   @impl true
+  def list_models do
+    # The claude CLI accepts short aliases and dated ids. Seed from the
+    # canonical catalog overrides + the models.dev anthropic family when the
+    # snapshot is warm; always dedup — pickers render whatever comes back.
+    aliases = Agentic.LLM.Canonical.models_for(:claude_code)
+
+    anthropic_family =
+      Agentic.LLM.Canonical.grep_models_for(:anthropic, "claude")
+
+    dated =
+      anthropic_family
+      |> Enum.reject(&String.contains?(&1, "/"))
+
+    (aliases ++ dated)
+    |> Enum.uniq()
+    |> Enum.take(20)
+  end
+
+  @impl true
   def format_session_arg(session_id, config) do
     arg = config[:session_arg] || "--session-id"
     [arg, session_id]

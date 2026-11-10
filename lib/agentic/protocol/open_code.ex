@@ -234,6 +234,28 @@ defmodule Agentic.Protocol.OpenCode do
     end
   end
 
+  @doc """
+  Spawn shape for a **resumed** one-shot turn: same as `turn_spawn_args/2`
+  but with `--session <id>` so opencode continues its existing conversation
+  (same context, new model via `config[:model]`).
+  """
+  def resume_turn_spawn_args(config, prompt, opencode_session_id) do
+    exe = resolve_exe(config[:command])
+
+    env_list =
+      charlist_env(config[:env] || %{}) ++
+        [{~c"AGENTIC_PROMPT", String.to_charlist(prompt)}]
+
+    args = config[:args] || []
+
+    script =
+      "exec " <>
+        Enum.join([exe | args ++ ["--session", opencode_session_id]], " ") <>
+        ~s( "$AGENTIC_PROMPT" </dev/null)
+
+    {"/bin/sh", ["-c", script], env_list}
+  end
+
   defp charlist_env(env) do
     env
     |> Enum.map(fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end)

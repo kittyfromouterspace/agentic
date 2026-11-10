@@ -256,6 +256,36 @@ defmodule Agentic.CLI.Transcript do
 
   defp error_text(err), do: to_text(err)
 
+  @doc """
+  The CLI-native session id buried in a streamed log, so a harness can
+  continue the same conversation with a different model or after a restart:
+
+    * opencode — every event carries `"sessionID":"ses_…"`; resuming means
+      `--session <id>` on the next one-shot turn
+    * claude — the `system` init envelope carries `"session_id":"<uuid>"`;
+      resuming means `--resume <id>`
+
+  Scans the whole log (first hit wins). Returns nil when nothing is found.
+  """
+  @spec session_id(atom(), String.t()) :: String.t() | nil
+  def session_id(:opencode, log) when is_binary(log) do
+    regex_first(log, ~r/"sessionID":"(ses_[0-9a-zA-Z]+)"/)
+  end
+
+  def session_id(:claude_code, log) when is_binary(log) do
+    regex_first(log, ~r/"session_id":"([0-9a-f-]{36})"/i) ||
+      regex_first(log, ~r/--resume[ =]([0-9a-f-]{36})/i)
+  end
+
+  def session_id(_kind, _log), do: nil
+
+  defp regex_first(log, regex) do
+    case Regex.run(regex, log) do
+      [_, capture] -> capture
+      _ -> nil
+    end
+  end
+
   defp to_text(nil), do: ""
   defp to_text(v) when is_binary(v), do: String.trim(v)
   defp to_text(v), do: String.trim(Kernel.inspect(v, limit: 3))

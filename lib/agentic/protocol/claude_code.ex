@@ -121,6 +121,37 @@ defmodule Agentic.Protocol.ClaudeCode do
     |> Enum.take(20)
   end
 
+  @doc """
+  Spawn shape for a **resumed** long-lived stream session: `{program, args,
+  env_list, extra_port_opts}` — `resume_args` (`-p … --resume`) plus the
+  claude session id, sandbox-wrapped exactly like `start/2` wraps a fresh
+  spawn. The caller opens the port inside its capture owner; the
+  conversation continues on stdin as stream-json user envelopes (new model
+  via `build_config(%{model: …})` → `resume_args ++ model_args`).
+  """
+  def resume_spawn_args(config, ctx, claude_session_id) do
+    built = build_config(config)
+
+    workspace = ctx.metadata[:workspace] || File.cwd!()
+    allowed_roots = ctx.metadata[:allowed_roots] || [workspace]
+    agent_dirs = allowed_roots -- [workspace]
+
+    {exe, args, extra_port_opts} =
+      Runner.wrap_executable(
+        :os.find_executable(String.to_charlist(built[:command])) || built[:command],
+        (built[:resume_args] || built[:args] || []) ++ [claude_session_id],
+        workspace: workspace,
+        agent_dirs: agent_dirs
+      )
+
+    env =
+      built
+      |> merge_env(built[:env] || %{})
+      |> Enum.map(fn {k, v} -> {String.to_charlist(k), String.to_charlist(v)} end)
+
+    {exe, args, env, extra_port_opts}
+  end
+
   @impl true
   def format_session_arg(session_id, config) do
     arg = config[:session_arg] || "--session-id"

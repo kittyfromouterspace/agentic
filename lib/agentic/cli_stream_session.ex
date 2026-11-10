@@ -68,6 +68,10 @@ defmodule Agentic.CLI.StreamSession do
 
     * `:initial_prompt` — first prompt; wrapped per protocol (claude: a
       stream-json user envelope over stdin; opencode: `$AGENTIC_PROMPT`)
+    * `:resume_cli_session_id` — continue the CLI's own conversation:
+      claude reopens with `--resume <id>` (stream-json stdin keeps working);
+      opencode reopens its one-shot turn with `--session <id>`. This is how
+      a harness continues a task with a different model — same context.
     * `:on_chunk` — `(binary() -> any())`, every stdout/stderr chunk
     * `:on_exit` — `(status :: integer() | :closed -> any())`
     * `:on_heartbeat` — `(-> any())`, called every `:heartbeat_ms` while
@@ -178,6 +182,47 @@ defmodule Agentic.CLI.StreamSession do
   end
 
   defp open_session_port(:claude_code, backend_config, ctx, opts) do
+    case opts[:resume_cli_session_id] do
+      claude_session_id when is_binary(claude_session_id) and claude_session_id != "" ->
+        resume_claude_port(backend_config, ctx, opts, claude_session_id)
+
+      _ ->
+        fresh_claude_port(backend_config, ctx, opts)
+    end
+  end
+
+  defp open_session_port(:opencode, backend_config, ctx, opts) do
+    config = Protocol.OpenCode.build_config(backend_config)
+
+    {program, args, env_list} =
+      case opts[:resume_cli_session_id] do
+        opencode_session_id when is_binary(opencode_session_id) and opencode_session_id != "" ->
+          Protocol.OpenCode.resume_turn_spawn_args(
+            config,
+            opts[:initial_prompt] || "",
+            opencode_session_id
+          )
+
+        _ ->
+          Protocol.OpenCode.turn_spawn_args(config, opts[:initial_prompt] || "")
+      end
+
+    workspace = ctx.metadata[:workspace]
+
+    cd_opt =
+      case workspace do
+        w when is_binary(w) -> [{:cd, w}]
+        _ -> []
+      end
+
+    port_opts =
+      [:stream, :binary, :exit_status, :stderr_to_stdout, {:args, args}] ++
+        cd_opt ++ [{:env, env_list}]
+
+    {:ok, Port.open({:spawn_executable, program}, port_opts), nil}
+  end
+
+  defp fresh_claude_port(backend_config, ctx, opts) do
     # ClaudeCode.start's contract is {:ok, session_id} only; any deviation
     # is downgraded to an error rather than raising inside the owner task.
     result =
@@ -194,25 +239,40 @@ defmodule Agentic.CLI.StreamSession do
     result
   end
 
-  defp open_session_port(:opencode, backend_config, ctx, opts) do
-    config = Protocol.OpenCode.build_config(backend_config)
+  defp resume_claude_port(backend_config, ctx, opts, claude_session_id) do
+    result =
+      try do
+        {program, args, env_list, extra_port_opts} =
+          Protocol.ClaudeCode.resume_spawn_args(backend_config, ctx, claude_session_id)
 
-    {program, args, env_list} =
-      Protocol.OpenCode.turn_spawn_args(config, opts[:initial_prompt] || "")
+        workspace = ctx.metadata[:workspace]
 
-    workspace = ctx.metadata[:workspace]
+        cd_opt =
+          case workspace do
+            w when is_binary(w) -> [{:cd, w}]
+            _ -> []
+          end
 
-    cd_opt =
-      case workspace do
-        w when is_binary(w) -> [{:cd, w}]
-        _ -> []
+        port =
+          Port.open(
+            {:spawn_executable, program},
+            [
+              :stream,
+              :binary,
+              :exit_status,
+              :stderr_to_stdout,
+              {:args, args},
+              cd_opt,
+              {:env, env_list}
+            ] ++ extra_port_opts
+          )
+
+        {:ok, port, claude_stdin(opts[:initial_prompt])}
+      rescue
+        e -> {:error, {:claude_resume_failed, Exception.message(e)}}
       end
 
-    port_opts =
-      [:stream, :binary, :exit_status, :stderr_to_stdout, {:args, args}] ++
-        cd_opt ++ [{:env, env_list}]
-
-    {:ok, Port.open({:spawn_executable, program}, port_opts), nil}
+    result
   end
 
   defp claude_stdin(prompt) when is_binary(prompt) and prompt != "" do

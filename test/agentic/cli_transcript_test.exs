@@ -99,4 +99,23 @@ defmodule Agentic.CLI.TranscriptTest do
   test "unknown protocol falls back to :raw" do
     assert :raw = Agentic.CLI.Transcript.summarize_line(:codex, "{}")
   end
+
+  describe "session_id/2" do
+    test "extracts opencode session ids from event lines" do
+      log = ~s({"type":"step_start","sessionID":"ses_e39d60551ffexChkJR6qloKERH"})
+      assert Agentic.CLI.Transcript.session_id(:opencode, log) == "ses_e39d60551ffexChkJR6qloKERH"
+    end
+
+    test "extracts claude session ids from the init envelope" do
+      log =
+        ~s({"type":"system","subtype":"init","session_id":"61f2c8cf-9d2b-4fae-a72e-fdae3d5ce9d3"})
+
+      assert Agentic.CLI.Transcript.session_id(:claude_code, log) ==
+               "61f2c8cf-9d2b-4fae-a72e-fdae3d5ce9d3"
+    end
+
+    test "returns nil when the log has no native session id" do
+      assert Agentic.CLI.Transcript.session_id(:opencode, "no json here") == nil
+    end
+  end
 end

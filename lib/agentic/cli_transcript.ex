@@ -55,6 +55,10 @@ defmodule Agentic.CLI.Transcript do
           "text" ->
             {:text, to_text(part["text"])}
 
+          # tool calls arrive as top-level "tool_use" (part.type "tool")
+          "tool_use" ->
+            {:tool, opencode_tool_text(part)}
+
           "tool" ->
             {:tool, opencode_tool_text(part)}
 
@@ -76,10 +80,16 @@ defmodule Agentic.CLI.Transcript do
   defp opencode_tool_text(part) do
     name = to_text(part["tool"])
     state = part["state"] || %{}
+    input = state["input"] || %{}
     title = to_text(state["title"])
     status = to_text(state["status"])
 
-    [name, title, status]
+    hint =
+      input
+      |> Enum.take(1)
+      |> Enum.map_join(", ", fn {k, v} -> "#{k}: #{short_value(v)}" end)
+
+    [name, hint, title, status]
     |> Enum.reject(&(&1 == ""))
     |> Enum.join(" — ")
   end

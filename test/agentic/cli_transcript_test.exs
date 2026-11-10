@@ -22,6 +22,14 @@ defmodule Agentic.CLI.TranscriptTest do
                Agentic.CLI.Transcript.summarize_line(:opencode, line)
     end
 
+    test "tool_use envelope (top-level type) with input hint" do
+      line =
+        ~s({"type":"tool_use","part":{"type":"tool","tool":"glob","state":{"status":"completed","input":{"pattern":"**/*.ex"}}}})
+
+      assert {:tool, "glob — pattern: **/*.ex — completed"} =
+               Agentic.CLI.Transcript.summarize_line(:opencode, line)
+    end
+
     test "step_finish with reason" do
       line = ~s({"type":"step_finish","part":{"type":"step-finish","reason":"stop","cost":0}})
 
